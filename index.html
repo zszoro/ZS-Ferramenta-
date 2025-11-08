@@ -14,7 +14,6 @@
       background: black;
     }
 
-    /* Vídeo de fundo */
     #bgVideo {
       position: fixed;
       top: 0;
@@ -85,7 +84,6 @@
       box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
     }
 
-    /* Modal */
     .modal {
       position: fixed;
       top: 50%;
@@ -93,7 +91,7 @@
       transform: translate(-50%, -50%) scale(0);
       width: 80%;
       max-width: 700px;
-      background: rgba(0,0,0,0.9);
+      background: rgba(0,0,0,0.95);
       border-radius: 15px;
       padding: 40px 30px;
       color: white;
@@ -145,7 +143,6 @@
       user-select: none;
     }
 
-    /* Resultado restaurantes */
     .resultado {
       margin-top: 20px;
     }
@@ -181,7 +178,6 @@
       font-size: 0.9em;
       color: #ddd;
     }
-
   </style>
 </head>
 <body>
@@ -203,15 +199,14 @@
 
   <!-- Modal -->
   <div class="modal" id="clientModal">
-    <h2>Qual é o nicho? Ex.: Restaurante</h2>
-    <input type="text" id="nichoInput" placeholder="Digite aqui..." />
+    <h2>Qual é o nicho?</h2>
+    <input type="text" id="nichoInput" placeholder="Ex.: Padaria, Petshop" />
     <h2>Qual é o estado?</h2>
     <select id="estadoInput">
       <option value="">Selecione o estado</option>
       <option value="SP">São Paulo</option>
       <option value="RJ">Rio de Janeiro</option>
       <option value="MG">Minas Gerais</option>
-      <!-- Adicione outros estados -->
     </select>
     <div>
       <button id="pesquisarBtn">Pesquisar</button>
@@ -219,6 +214,9 @@
     </div>
     <div class="resultado" id="resultadoRestaurantes"></div>
   </div>
+
+  <!-- Google Maps JS API -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=SUA_CHAVE_AQUI&libraries=places"></script>
 
   <script>
     const openBtn = document.getElementById('openModal');
@@ -238,15 +236,14 @@
       resultadoContainer.innerHTML = "";
     });
 
-    // Mapeamento simples de estados para lat/lng central aproximado
+    // Lat/Lng aproximados do centro de cada estado
     const estados = {
       "SP": {lat: -23.5505, lng: -46.6333},
       "RJ": {lat: -22.9068, lng: -43.1729},
       "MG": {lat: -19.9167, lng: -43.9345},
-      // Adicione outros estados
     };
 
-    pesquisarBtn.addEventListener('click', async () => {
+    pesquisarBtn.addEventListener('click', () => {
       const nicho = document.getElementById('nichoInput').value.trim();
       const estado = document.getElementById('estadoInput').value;
 
@@ -255,44 +252,39 @@
         return;
       }
 
-      resultadoContainer.innerHTML = "<p>Buscando restaurantes...</p>";
+      resultadoContainer.innerHTML = "<p>Buscando...</p>";
 
-      // Usando a Google Places API (ou similar)
-      const apiKey = "SUA_CHAVE_GOOGLE_PLACES"; // substitua aqui
+      const map = new google.maps.Map(document.createElement('div'));
+      const service = new google.maps.places.PlacesService(map);
+
       const location = estados[estado];
-      const radius = 50000; // 50 km
-      const type = "restaurant";
+      const request = {
+        query: `${nicho} em ${estado}`,
+        location: new google.maps.LatLng(location.lat, location.lng),
+        radius: 50000,
+      };
 
-      try {
-        const url = `https://cors-anywhere.herokuapp.com/https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location.lat},${location.lng}&radius=${radius}&type=${type}&keyword=${encodeURIComponent(nicho)}&key=${apiKey}`;
-        const response = await fetch(url);
-        const data = await response.json();
-
+      service.textSearch(request, (results, status) => {
         resultadoContainer.innerHTML = "";
-
-        if(data.results.length === 0) {
-          resultadoContainer.innerHTML = "<p>Nenhum restaurante encontrado.</p>";
-          return;
+        if (status === google.maps.places.PlacesServiceStatus.OK && results.length) {
+          results.forEach(place => {
+            const div = document.createElement('div');
+            div.classList.add('restaurante');
+            const photoUrl = place.photos ? place.photos[0].getUrl({maxWidth: 80, maxHeight: 80}) : 'https://via.placeholder.com/80';
+            div.innerHTML = `
+              <img src="${photoUrl}" alt="${place.name}" />
+              <div>
+                <h3>${place.name}</h3>
+                <p>${place.formatted_address || ''}</p>
+                <p>Rating: ${place.rating || 'N/A'}</p>
+              </div>
+            `;
+            resultadoContainer.appendChild(div);
+          });
+        } else {
+          resultadoContainer.innerHTML = "<p>Nenhum resultado encontrado.</p>";
         }
-
-        data.results.forEach(r => {
-          const div = document.createElement('div');
-          div.classList.add('restaurante');
-          div.innerHTML = `
-            <img src="${r.photos ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=100&photoreference=${r.photos[0].photo_reference}&key=${apiKey}` : 'https://via.placeholder.com/80'}" alt="${r.name}" />
-            <div>
-              <h3>${r.name}</h3>
-              <p>${r.vicinity || ''}</p>
-              <p>Rating: ${r.rating || 'N/A'}</p>
-            </div>
-          `;
-          resultadoContainer.appendChild(div);
-        });
-
-      } catch(err) {
-        console.error(err);
-        resultadoContainer.innerHTML = "<p>Erro ao buscar restaurantes.</p>";
-      }
+      });
     });
   </script>
 </body>
