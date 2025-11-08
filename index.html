@@ -5,14 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZS Ferramenta</title>
   <style>
-    /* Remove margens e ocupa toda a tela */
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
       overflow: hidden;
       font-family: Arial, sans-serif;
-      background: black; /* fallback caso o vídeo não carregue */
+      background: black;
     }
 
     /* Vídeo de fundo */
@@ -26,7 +25,6 @@
       z-index: -1;
     }
 
-    /* Camada escura por cima do vídeo */
     .overlay {
       position: fixed;
       top: 0;
@@ -37,7 +35,6 @@
       z-index: 0;
     }
 
-    /* Conteúdo central */
     .content {
       position: relative;
       z-index: 1;
@@ -51,20 +48,17 @@
       animation: fadeIn 1.5s ease-in;
     }
 
-    /* Animação suave de entrada */
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(20px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Título */
     h1 {
       font-size: 2.5em;
       margin-bottom: 40px;
       letter-spacing: 2px;
     }
 
-    /* Quadrados (cards) */
     .cards {
       display: flex;
       gap: 30px;
@@ -90,26 +84,104 @@
       transform: scale(1.05);
       box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
     }
+
+    /* Modal */
+    .modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      width: 80%;
+      max-width: 600px;
+      background: rgba(0,0,0,0.9);
+      border-radius: 15px;
+      padding: 40px 30px;
+      color: white;
+      z-index: 10;
+      transition: transform 0.3s ease-in-out;
+      backdrop-filter: blur(10px);
+    }
+
+    .modal.active {
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .modal h2 {
+      margin-bottom: 20px;
+    }
+
+    .modal input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      margin-bottom: 20px;
+      font-size: 1em;
+    }
+
+    .modal button {
+      padding: 12px 25px;
+      border: none;
+      border-radius: 10px;
+      background: #ff6b6b;
+      color: white;
+      font-size: 1em;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .modal button:hover {
+      background: #ff4c4c;
+    }
+
+    /* Fundo desfocado quando modal aberto */
+    body.modal-open #bgVideo,
+    body.modal-open .overlay,
+    body.modal-open .content {
+      filter: blur(5px);
+      pointer-events: none;
+      user-select: none;
+    }
   </style>
 </head>
 <body>
-  <!-- Vídeo de fundo -->
   <video autoplay muted loop playsinline id="bgVideo">
     <source src="fundo.mp4" type="video/mp4">
     Seu navegador não suporta vídeo HTML5.
   </video>
 
-  <!-- Camada escura -->
   <div class="overlay"></div>
 
-  <!-- Conteúdo principal -->
   <div class="content">
     <h1>ZS Ferramenta</h1>
     <div class="cards">
-      <div class="card">Encontrar Cliente</div>
+      <div class="card" id="openModal">Encontrar Cliente</div>
       <div class="card">Criar Novo</div>
       <div class="card">Prompt</div>
     </div>
   </div>
+
+  <!-- Modal -->
+  <div class="modal" id="clientModal">
+    <h2>Qual é o nicho? Ex.: Restaurante</h2>
+    <input type="text" placeholder="Digite aqui..." />
+    <button id="closeModal">Fechar</button>
+  </div>
+
+  <script>
+    const openBtn = document.getElementById('openModal');
+    const closeBtn = document.getElementById('closeModal');
+    const modal = document.getElementById('clientModal');
+
+    openBtn.addEventListener('click', () => {
+      modal.classList.add('active');
+      document.body.classList.add('modal-open');
+    });
+
+    closeBtn.addEventListener('click', () => {
+      modal.classList.remove('active');
+      document.body.classList.remove('modal-open');
+    });
+  </script>
 </body>
 </html>
