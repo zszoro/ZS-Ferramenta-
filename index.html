@@ -1,86 +1,109 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZS Ferramenta</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      font-family: "Poppins", sans-serif;
-    }
-
-    body {
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    /* Fundo em vídeo */
-    video {
+    /* Fundo de vídeo */
+    #bgVideo {
       position: fixed;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
+      min-width: 100%;
+      min-height: 100%;
       object-fit: cover;
       z-index: -1;
     }
 
-    /* Container dos quadrados */
+    /* Container central */
     .container {
       display: flex;
-      justify-content: center;
+      flex-direction: column;
       align-items: center;
+      justify-content: center;
       height: 100vh;
-      gap: 50px;
-    }
-
-    .box {
-      width: 200px;
-      height: 200px;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      border-radius: 20px;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
-      display: flex;
-      justify-content: center;
-      align-items: center;
       color: white;
-      font-size: 1.2em;
-      font-weight: bold;
-      transition: all 0.3s ease;
-      cursor: pointer;
-    }
-
-    .box:hover {
-      transform: scale(1.1);
-      background: rgba(255, 255, 255, 0.25);
+      text-align: center;
+      backdrop-filter: blur(5px);
+      gap: 30px;
     }
 
     h1 {
-      position: absolute;
-      top: 40px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: white;
-      font-size: 2.5em;
-      text-shadow: 0 0 15px black;
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(90deg, #00ffff, #007bff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 20px;
+      animation: fadeIn 1s ease-in-out;
+    }
+
+    /* Quadrados */
+    .cards {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .card {
+      width: 200px;
+      height: 150px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 1.1rem;
+      backdrop-filter: blur(5px);
+      cursor: pointer;
+      transition: 0.3s;
+      animation: popIn 0.8s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-5px) scale(1.05);
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.8); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    footer {
+      position: fixed;
+      bottom: 15px;
+      color: rgba(255,255,255,0.6);
+      font-size: 0.9rem;
     }
   </style>
 </head>
 <body>
-  <video autoplay muted loop playsinline>
+  <!-- Vídeo de fundo -->
+  <video autoplay muted loop playsinline id="bgVideo">
     <source src="10296180-hd_1920_1080_25fps.mp4" type="video/mp4">
+    Seu navegador não suporta vídeo em segundo plano.
   </video>
 
-  <h1>Ferramenta ZS</h1>
-
+  <!-- Conteúdo -->
   <div class="container">
-    <div class="box" onclick="alert('🔍 Procurando clientes...')">Encontrar Cliente</div>
-    <div class="box" onclick="alert('🧩 Criando novo projeto...')">Criar Novo</div>
-    <div class="box" onclick="alert('💬 Abrindo prompt...')">Prompt</div>
+    <h1>ZS Ferramenta</h1>
+    <div class="cards">
+      <div class="card">Encontrar Cliente</div>
+      <div class="card">Criar Novo</div>
+      <div class="card">Prompt</div>
+    </div>
   </div>
+
+  <footer>© 2025 ZS Ferramenta</footer>
 </body>
 </html>
