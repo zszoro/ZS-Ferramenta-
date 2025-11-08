@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZS Ferramenta</title>
   <style>
-    /* Remove margens e ocupa tela toda */
+    /* Remove margens e ocupa toda a tela */
     html, body {
       margin: 0;
       padding: 0;
@@ -14,7 +14,7 @@
       font-family: Arial, sans-serif;
     }
 
-    /* Estilo do vídeo de fundo */
+    /* Vídeo de fundo */
     #bgVideo {
       position: fixed;
       top: 0;
@@ -25,7 +25,7 @@
       z-index: -1;
     }
 
-    /* Overlay leve pra destacar o conteúdo */
+    /* Camada escura por cima do vídeo */
     .overlay {
       position: fixed;
       top: 0;
@@ -36,7 +36,7 @@
       z-index: 0;
     }
 
-    /* Conteúdo principal */
+    /* Conteúdo central */
     .content {
       position: relative;
       z-index: 1;
@@ -47,18 +47,28 @@
       height: 100%;
       text-align: center;
       color: white;
+      animation: fadeIn 1.5s ease-in;
+    }
+
+    /* Animação suave de entrada */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     /* Título */
     h1 {
-      font-size: 2em;
+      font-size: 2.5em;
       margin-bottom: 40px;
+      letter-spacing: 2px;
     }
 
-    /* Quadrados */
+    /* Quadrados (cards) */
     .cards {
       display: flex;
       gap: 30px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
 
     .card {
@@ -69,24 +79,28 @@
       cursor: pointer;
       transition: all 0.3s;
       backdrop-filter: blur(5px);
+      font-size: 1.2em;
+      text-transform: uppercase;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
     }
 
     .card:hover {
       background: rgba(255, 255, 255, 0.2);
       transform: scale(1.05);
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
     }
   </style>
 </head>
 <body>
-  <!-- Vídeo de fundo -->
+  <!-- Vídeo de fundo (carregado de link externo) -->
   <video autoplay muted loop playsinline id="bgVideo">
-    <source src="fundo.mp4" type="video/mp4">
+    <source src="https://videos.pexels.com/video-files/854640/854640-hd_1920_1080_25fps.mp4" type="video/mp4">
   </video>
 
   <!-- Camada escura -->
   <div class="overlay"></div>
 
-  <!-- Conteúdo -->
+  <!-- Conteúdo principal -->
   <div class="content">
     <h1>ZS Ferramenta</h1>
     <div class="cards">
