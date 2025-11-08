@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ZS Ferramenta - Demo Funcionando</title>
+<title>ZS Ferramenta - Real</title>
 <style>
 html, body { margin: 0; padding: 0; height: 100%; font-family: Arial; overflow: hidden; }
 #bgVideo { position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: -1; }
@@ -60,6 +60,9 @@ body.modal-open #bgVideo, body.modal-open .overlay, body.modal-open .content { f
   <div class="resultado" id="resultadoRestaurantes"></div>
 </div>
 
+<!-- Google Maps JS API -->
+<script src="https://maps.googleapis.com/maps/api/js?key=SUA_CHAVE_AQUI&libraries=places"></script>
+
 <script>
 const openBtn = document.getElementById('openModal');
 const closeBtn = document.getElementById('closeModal');
@@ -78,19 +81,12 @@ closeBtn.addEventListener('click', () => {
   resultadoContainer.innerHTML = "";
 });
 
-// Função demo que gera resultados aleatórios
-function gerarResultadosDemo(nicho, estado){
-  const demo = [];
-  for(let i=1;i<=5;i++){
-    demo.push({
-      name: `${nicho} Exemplo ${i}`,
-      address: `${i} Rua Principal, ${estado}`,
-      rating: (Math.random()*2+3).toFixed(1),
-      photo: "https://via.placeholder.com/80"
-    });
-  }
-  return demo;
-}
+// Lat/Lng aproximados dos estados
+const estados = {
+  "SP": {lat: -23.5505, lng: -46.6333},
+  "RJ": {lat: -22.9068, lng: -43.1729},
+  "MG": {lat: -19.9167, lng: -43.9345},
+};
 
 pesquisarBtn.addEventListener('click', () => {
   const nicho = document.getElementById('nichoInput').value.trim();
@@ -103,24 +99,37 @@ pesquisarBtn.addEventListener('click', () => {
 
   resultadoContainer.innerHTML = "<p>Buscando...</p>";
 
-  // Simula pesquisa de IA/API
-  setTimeout(()=>{
-    const resultados = gerarResultadosDemo(nicho, estado);
+  const map = new google.maps.Map(document.createElement('div'));
+  const service = new google.maps.places.PlacesService(map);
+
+  const location = estados[estado];
+  const request = {
+    query: `${nicho} em ${estado}`,
+    location: new google.maps.LatLng(location.lat, location.lng),
+    radius: 50000,
+  };
+
+  service.textSearch(request, (results, status) => {
     resultadoContainer.innerHTML = "";
-    resultados.forEach(r=>{
-      const div = document.createElement('div');
-      div.classList.add('restaurante');
-      div.innerHTML = `
-        <img src="${r.photo}" alt="${r.name}" />
-        <div>
-          <h3>${r.name}</h3>
-          <p>${r.address}</p>
-          <p>Rating: ${r.rating}</p>
-        </div>
-      `;
-      resultadoContainer.appendChild(div);
-    });
-  }, 500);
+    if (status === google.maps.places.PlacesServiceStatus.OK && results.length) {
+      results.forEach(place => {
+        const div = document.createElement('div');
+        div.classList.add('restaurante');
+        const photoUrl = place.photos ? place.photos[0].getUrl({maxWidth: 80, maxHeight: 80}) : 'https://via.placeholder.com/80';
+        div.innerHTML = `
+          <img src="${photoUrl}" alt="${place.name}" />
+          <div>
+            <h3>${place.name}</h3>
+            <p>${place.formatted_address || ''}</p>
+            <p>Rating: ${place.rating || 'N/A'}</p>
+          </div>
+        `;
+        resultadoContainer.appendChild(div);
+      });
+    } else {
+      resultadoContainer.innerHTML = "<p>Nenhum resultado encontrado.</p>";
+    }
+  });
 });
 </script>
 
