@@ -92,7 +92,7 @@
       left: 50%;
       transform: translate(-50%, -50%) scale(0);
       width: 80%;
-      max-width: 600px;
+      max-width: 700px;
       background: rgba(0,0,0,0.9);
       border-radius: 15px;
       padding: 40px 30px;
@@ -100,6 +100,8 @@
       z-index: 10;
       transition: transform 0.3s ease-in-out;
       backdrop-filter: blur(10px);
+      max-height: 90%;
+      overflow-y: auto;
     }
 
     .modal.active {
@@ -107,10 +109,10 @@
     }
 
     .modal h2 {
-      margin-bottom: 20px;
+      margin-bottom: 15px;
     }
 
-    .modal input {
+    .modal input, .modal select {
       width: 100%;
       padding: 12px;
       border-radius: 10px;
@@ -128,13 +130,13 @@
       font-size: 1em;
       cursor: pointer;
       transition: background 0.3s;
+      margin-right: 10px;
     }
 
     .modal button:hover {
       background: #ff4c4c;
     }
 
-    /* Fundo desfocado quando modal aberto */
     body.modal-open #bgVideo,
     body.modal-open .overlay,
     body.modal-open .content {
@@ -142,6 +144,44 @@
       pointer-events: none;
       user-select: none;
     }
+
+    /* Resultado restaurantes */
+    .resultado {
+      margin-top: 20px;
+    }
+
+    .restaurante {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 15px;
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      backdrop-filter: blur(5px);
+    }
+
+    .restaurante img {
+      width: 80px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 10px;
+    }
+
+    .restaurante div {
+      text-align: left;
+    }
+
+    .restaurante h3 {
+      margin: 0 0 5px 0;
+    }
+
+    .restaurante p {
+      margin: 0;
+      font-size: 0.9em;
+      color: #ddd;
+    }
+
   </style>
 </head>
 <body>
@@ -163,15 +203,29 @@
 
   <!-- Modal -->
   <div class="modal" id="clientModal">
-    <h2>Qual é o nicho?</h2>
-    <input type="text" placeholder="ex: restaurante..." />
-    <button id="closeModal">Fechar</button>
+    <h2>Qual é o nicho? Ex.: Restaurante</h2>
+    <input type="text" id="nichoInput" placeholder="Digite aqui..." />
+    <h2>Qual é o estado?</h2>
+    <select id="estadoInput">
+      <option value="">Selecione o estado</option>
+      <option value="SP">São Paulo</option>
+      <option value="RJ">Rio de Janeiro</option>
+      <option value="MG">Minas Gerais</option>
+      <!-- Adicione outros estados -->
+    </select>
+    <div>
+      <button id="pesquisarBtn">Pesquisar</button>
+      <button id="closeModal">Fechar</button>
+    </div>
+    <div class="resultado" id="resultadoRestaurantes"></div>
   </div>
 
   <script>
     const openBtn = document.getElementById('openModal');
     const closeBtn = document.getElementById('closeModal');
     const modal = document.getElementById('clientModal');
+    const pesquisarBtn = document.getElementById('pesquisarBtn');
+    const resultadoContainer = document.getElementById('resultadoRestaurantes');
 
     openBtn.addEventListener('click', () => {
       modal.classList.add('active');
@@ -181,6 +235,64 @@
     closeBtn.addEventListener('click', () => {
       modal.classList.remove('active');
       document.body.classList.remove('modal-open');
+      resultadoContainer.innerHTML = "";
+    });
+
+    // Mapeamento simples de estados para lat/lng central aproximado
+    const estados = {
+      "SP": {lat: -23.5505, lng: -46.6333},
+      "RJ": {lat: -22.9068, lng: -43.1729},
+      "MG": {lat: -19.9167, lng: -43.9345},
+      // Adicione outros estados
+    };
+
+    pesquisarBtn.addEventListener('click', async () => {
+      const nicho = document.getElementById('nichoInput').value.trim();
+      const estado = document.getElementById('estadoInput').value;
+
+      if(!nicho || !estado) {
+        alert("Preencha o nicho e selecione o estado!");
+        return;
+      }
+
+      resultadoContainer.innerHTML = "<p>Buscando restaurantes...</p>";
+
+      // Usando a Google Places API (ou similar)
+      const apiKey = "SUA_CHAVE_GOOGLE_PLACES"; // substitua aqui
+      const location = estados[estado];
+      const radius = 50000; // 50 km
+      const type = "restaurant";
+
+      try {
+        const url = `https://cors-anywhere.herokuapp.com/https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location.lat},${location.lng}&radius=${radius}&type=${type}&keyword=${encodeURIComponent(nicho)}&key=${apiKey}`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        resultadoContainer.innerHTML = "";
+
+        if(data.results.length === 0) {
+          resultadoContainer.innerHTML = "<p>Nenhum restaurante encontrado.</p>";
+          return;
+        }
+
+        data.results.forEach(r => {
+          const div = document.createElement('div');
+          div.classList.add('restaurante');
+          div.innerHTML = `
+            <img src="${r.photos ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=100&photoreference=${r.photos[0].photo_reference}&key=${apiKey}` : 'https://via.placeholder.com/80'}" alt="${r.name}" />
+            <div>
+              <h3>${r.name}</h3>
+              <p>${r.vicinity || ''}</p>
+              <p>Rating: ${r.rating || 'N/A'}</p>
+            </div>
+          `;
+          resultadoContainer.appendChild(div);
+        });
+
+      } catch(err) {
+        console.error(err);
+        resultadoContainer.innerHTML = "<p>Erro ao buscar restaurantes.</p>";
+      }
     });
   </script>
 </body>
