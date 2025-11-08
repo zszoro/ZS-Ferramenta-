@@ -5,7 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZS Ferramenta</title>
   <style>
-    /* Fundo de vídeo */
+    /* Remove margens e ocupa tela toda */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+
+    /* Estilo do vídeo de fundo */
     #bgVideo {
       position: fixed;
       top: 0;
@@ -16,86 +25,69 @@
       z-index: -1;
     }
 
-    /* Container central */
-    .container {
+    /* Overlay leve pra destacar o conteúdo */
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 0;
+    }
+
+    /* Conteúdo principal */
+    .content {
+      position: relative;
+      z-index: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
-      color: white;
+      height: 100%;
       text-align: center;
-      backdrop-filter: blur(5px);
-      gap: 30px;
+      color: white;
     }
 
+    /* Título */
     h1 {
-      font-size: 2rem;
-      font-weight: 700;
-      background: linear-gradient(90deg, #00ffff, #007bff);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      margin-bottom: 20px;
-      animation: fadeIn 1s ease-in-out;
+      font-size: 2em;
+      margin-bottom: 40px;
     }
 
     /* Quadrados */
     .cards {
       display: flex;
-      gap: 20px;
-      flex-wrap: wrap;
-      justify-content: center;
+      gap: 30px;
     }
 
     .card {
-      width: 200px;
-      height: 150px;
-      background: rgba(255, 255, 255, 0.15);
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.3);
       border-radius: 15px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 1.1rem;
-      backdrop-filter: blur(5px);
+      padding: 30px 50px;
       cursor: pointer;
-      transition: 0.3s;
-      animation: popIn 0.8s ease;
+      transition: all 0.3s;
+      backdrop-filter: blur(5px);
     }
 
     .card:hover {
-      transform: translateY(-5px) scale(1.05);
-      background: rgba(255, 255, 255, 0.25);
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    @keyframes popIn {
-      from { opacity: 0; transform: scale(0.8); }
-      to { opacity: 1; transform: scale(1); }
-    }
-
-    footer {
-      position: fixed;
-      bottom: 15px;
-      color: rgba(255,255,255,0.6);
-      font-size: 0.9rem;
+      background: rgba(255, 255, 255, 0.2);
+      transform: scale(1.05);
     }
   </style>
 </head>
 <body>
   <!-- Vídeo de fundo -->
   <video autoplay muted loop playsinline id="bgVideo">
-    <source src="10296180-hd_1920_1080_25fps.mp4" type="video/mp4">
-    Seu navegador não suporta vídeo em segundo plano.
+    <source src="fundo.mp4" type="video/mp4">
   </video>
 
+  <!-- Camada escura -->
+  <div class="overlay"></div>
+
   <!-- Conteúdo -->
-  <div class="container">
+  <div class="content">
     <h1>ZS Ferramenta</h1>
     <div class="cards">
       <div class="card">Encontrar Cliente</div>
@@ -103,7 +95,5 @@
       <div class="card">Prompt</div>
     </div>
   </div>
-
-  <footer>© 2025 ZS Ferramenta</footer>
 </body>
 </html>
