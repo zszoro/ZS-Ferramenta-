@@ -12,6 +12,7 @@
       height: 100%;
       overflow: hidden;
       font-family: Arial, sans-serif;
+      background: black; /* fallback caso o vídeo não carregue */
     }
 
     /* Vídeo de fundo */
@@ -19,8 +20,8 @@
       position: fixed;
       top: 0;
       left: 0;
-      min-width: 100%;
-      min-height: 100%;
+      width: 100%;
+      height: 100%;
       object-fit: cover;
       z-index: -1;
     }
@@ -92,9 +93,10 @@
   </style>
 </head>
 <body>
-  <!-- Vídeo de fundo (carregado de link externo) -->
+  <!-- Vídeo de fundo -->
   <video autoplay muted loop playsinline id="bgVideo">
-    <source src="https://videos.pexels.com/video-files/854640/854640-hd_1920_1080_25fps.mp4" type="video/mp4">
+    <source src="fundo.mp4" type="video/mp4">
+    Seu navegador não suporta vídeo HTML5.
   </video>
 
   <!-- Camada escura -->
