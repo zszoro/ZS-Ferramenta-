@@ -442,6 +442,23 @@ function extractRequestedKind(prompt: string): BuilderProject["kind"] | null {
 function detectIndustry(prompt: string) {
   const lower = normalize(prompt);
   const matches: Array<[string, string]> = [
+    ["padaria", "padarias"],
+    ["pao", "padarias"],
+    ["paes", "padarias"],
+    ["odontologia", "clinicas odontologicas"],
+    ["odontologica", "clinicas odontologicas"],
+    ["dentista", "clinicas odontologicas"],
+    ["dental", "clinicas odontologicas"],
+    ["oficina mecanica", "oficinas mecanicas"],
+    ["oficina", "oficinas mecanicas"],
+    ["mecanica", "oficinas mecanicas"],
+    ["mecanico", "oficinas mecanicas"],
+    ["auto", "oficinas mecanicas"],
+    ["roupa", "lojas de roupas"],
+    ["roupas", "lojas de roupas"],
+    ["moda", "lojas de roupas"],
+    ["vestuario", "lojas de roupas"],
+    ["boutique", "lojas de roupas"],
     ["restaurante", "restaurantes"],
     ["barbearia", "barbearias"],
     ["barber", "barbearias"],
@@ -519,10 +536,18 @@ function buildName(prompt: string, industry: string, kind: BuilderProject["kind"
   if (industry === "restaurantes") return "Mesa ZS";
   if (industry === "academias") return "Fit ZS";
   if (industry === "clinicas") return "Clinica ZS";
+  if (industry === "clinicas odontologicas") return "Clinica ZS";
+  if (industry === "padarias") return "Padaria ZS";
+  if (industry === "oficinas mecanicas") return "Auto ZS";
+  if (industry === "lojas de roupas") return "Moda ZS";
 
   const prefix = kind === "site" || kind === "landing" ? "Site ZS" : "SaaS ZS";
   const suffix = industry
     .replace("negocios digitais", "Builder")
+    .replace("padarias", "Padaria")
+    .replace("clinicas odontologicas", "Dental")
+    .replace("oficinas mecanicas", "Auto")
+    .replace("lojas de roupas", "Moda")
     .replace("lojas online", "Store")
     .replace("pet shops", "Pet")
     .replace("escritorios juridicos", "Legal")
@@ -676,6 +701,7 @@ function buildPreviewHtml(input: {
   const escapedName = escapeHtml(input.name);
   const media = getNicheMedia(input.industry);
   const profile = getNicheProfile(input.industry, input.name);
+  const theme = profile.theme;
   const contact = buildContact(input.brief);
   const description = escapeHtml(
     isDashboard
@@ -697,10 +723,18 @@ function buildPreviewHtml(input: {
         </article>`,
     )
     .join("");
-
-  const productSurface = isDashboard
-    ? `
-      <section class="product" aria-label="Preview do produto">
+  const contactRows = [
+    contact.whatsapp ? `<span>${escapeHtml(contact.whatsapp)}</span>` : "",
+    contact.email ? `<span>${escapeHtml(contact.email)}</span>` : "",
+    !contact.whatsapp && !contact.email ? "<span>Adicione telefone ou email no briefing para mostrar o contato aqui.</span>" : "",
+  ]
+    .filter(Boolean)
+    .join("");
+  const navItems = profile.navItems
+    .map((item, index) => `<a href="${index === profile.navItems.length - 1 ? "#contato" : "#servicos"}">${escapeHtml(item)}</a>`)
+    .join("");
+  const dashboardSurface = `
+      <section class="product dashboard-panel" aria-label="Preview do produto">
         <div class="toolbar">
           <span>Hoje</span><span>Clientes</span><span>Automacoes</span>
         </div>
@@ -714,13 +748,20 @@ function buildPreviewHtml(input: {
           <p><b>CRM integrado</b><span>12 tarefas abertas</span></p>
           <p><b>IA ativa</b><span>gerando melhorias</span></p>
         </div>
-      </section>`
+      </section>`;
+
+  const productSurface = isDashboard
+    ? dashboardSurface
     : `
-      <section class="product site media-card" aria-label="Preview do site">
+      <section class="product media-card" aria-label="Preview do site">
         <img src="${media.secondary}" alt="${escapeHtml(media.secondaryAlt)}" referrerpolicy="no-referrer" />
         <div class="media-overlay">
           <p>${escapeHtml(profile.kicker)}</p>
           <h2>${escapeHtml(profile.cardTitle)}</h2>
+        </div>
+        <div class="floating-proof">
+          <strong>${escapeHtml(profile.proofPoints[0] ?? "Atendimento")}</strong>
+          <span>${escapeHtml(profile.testimonial)}</span>
         </div>
       </section>`;
 
@@ -729,25 +770,37 @@ function buildPreviewHtml(input: {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <base href="about:srcdoc" />
   <title>${escapedName}</title>
   <style>
     * { box-sizing: border-box; }
+    :root {
+      --bg: ${theme.background};
+      --surface: ${theme.surface};
+      --surface-strong: ${theme.surfaceStrong};
+      --text: ${theme.text};
+      --muted: ${theme.muted};
+      --line: ${theme.line};
+      --header: ${theme.header};
+      --accent: ${input.palette.primary};
+      --accent-soft: ${theme.accentSoft};
+      --shadow: ${theme.shadow};
+    }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
       min-height: 100vh;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background:
-        linear-gradient(90deg, rgba(0,0,0,.76), rgba(0,0,0,.52)),
-        url("${media.hero}") center/cover fixed,
-        ${input.palette.background};
-      color: ${input.palette.text};
+        linear-gradient(180deg, rgba(255,255,255,.08), transparent 34%),
+        var(--bg);
+      color: var(--text);
     }
     .page {
       min-height: 100vh;
-      padding: clamp(18px, 4vw, 46px);
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      gap: clamp(22px, 4vw, 38px);
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 22px 0 32px;
     }
     header, footer {
       display: flex;
@@ -755,32 +808,47 @@ function buildPreviewHtml(input: {
       justify-content: space-between;
       gap: 16px;
     }
+    header {
+      position: sticky;
+      top: 12px;
+      z-index: 5;
+      min-height: 62px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--header);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, .08);
+    }
     .brand {
       display: inline-flex;
       align-items: center;
       gap: 10px;
       font-weight: 900;
-      letter-spacing: .03em;
-      color: ${input.palette.text};
+      letter-spacing: 0;
+      color: var(--text);
     }
     .brand::before {
       content: "";
       width: 12px;
       height: 12px;
-      border-radius: 4px;
-      background: ${input.palette.primary};
-      box-shadow: 0 0 22px ${input.palette.primary};
+      border-radius: 3px;
+      background: var(--accent);
+      box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 48%, transparent);
     }
     nav {
       display: flex;
       gap: 18px;
-      color: ${input.palette.muted};
       font-size: 13px;
       font-weight: 700;
     }
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+    }
     .nav-cta {
-      color: ${input.palette.background};
-      background: ${input.palette.primary};
+      color: #080808;
+      background: var(--accent);
       border-radius: 999px;
       padding: 9px 13px;
       font-size: 12px;
@@ -789,16 +857,24 @@ function buildPreviewHtml(input: {
     }
     .hero {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(320px, .9fr);
+      grid-template-columns: minmax(0, .92fr) minmax(340px, 1.08fr);
       align-items: center;
-      gap: clamp(22px, 5vw, 58px);
+      gap: 48px;
+      min-height: calc(100vh - 120px);
+      padding: 42px 0 34px;
     }
     h1 {
       margin: 0;
       max-width: 820px;
-      font-size: clamp(42px, 8vw, 92px);
-      line-height: .9;
-      letter-spacing: -0.055em;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 70px;
+      line-height: .96;
+      letter-spacing: 0;
+      font-weight: 700;
+    }
+    h1::selection, p::selection, strong::selection, span::selection {
+      background: var(--accent);
+      color: #050505;
     }
     .proof {
       display: flex;
@@ -807,18 +883,18 @@ function buildPreviewHtml(input: {
       margin-top: 18px;
     }
     .proof span {
-      border: 1px solid rgba(255,255,255,.12);
+      border: 1px solid var(--line);
       border-radius: 999px;
-      background: rgba(0,0,0,.32);
+      background: var(--surface);
       padding: 9px 12px;
-      color: ${input.palette.text};
+      color: var(--text);
       font-size: 12px;
       font-weight: 800;
     }
     .lead {
       max-width: 620px;
-      color: ${input.palette.muted};
-      font-size: clamp(16px, 2vw, 20px);
+      color: var(--muted);
+      font-size: 19px;
       line-height: 1.65;
       margin: 24px 0;
     }
@@ -829,7 +905,7 @@ function buildPreviewHtml(input: {
     }
     button, .primary, .secondary {
       border: 0;
-      border-radius: 12px;
+      border-radius: 8px;
       padding: 14px 18px;
       font-weight: 900;
       text-decoration: none;
@@ -839,29 +915,28 @@ function buildPreviewHtml(input: {
       min-height: 46px;
     }
     .primary {
-      background: ${input.palette.primary};
-      color: ${input.palette.background};
-      box-shadow: 0 18px 60px color-mix(in srgb, ${input.palette.primary} 22%, transparent);
+      background: var(--accent);
+      color: #080808;
+      box-shadow: 0 18px 54px color-mix(in srgb, var(--accent) 26%, transparent);
     }
     .secondary {
-      border: 1px solid color-mix(in srgb, ${input.palette.primary} 28%, transparent);
-      color: ${input.palette.text};
-      background: color-mix(in srgb, ${input.palette.surface} 80%, transparent);
+      border: 1px solid var(--line);
+      color: var(--text);
+      background: var(--surface);
     }
     .product {
-      border: 1px solid color-mix(in srgb, ${input.palette.primary} 22%, transparent);
-      background:
-        linear-gradient(145deg, color-mix(in srgb, ${input.palette.surfaceAlt} 86%, transparent), ${input.palette.surface});
-      border-radius: 22px;
-      padding: clamp(18px, 3vw, 28px);
-      box-shadow: 0 28px 100px rgba(0,0,0,.42);
+      border: 1px solid var(--line);
+      background: var(--surface-strong);
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: var(--shadow);
       min-height: 420px;
     }
     .media-card {
       position: relative;
       overflow: hidden;
       padding: 0;
-      min-height: 560px;
+      min-height: 570px;
       isolation: isolate;
     }
     .media-card img {
@@ -886,19 +961,43 @@ function buildPreviewHtml(input: {
       bottom: 22px;
     }
     .media-overlay p {
-      color: ${input.palette.primary};
+      color: var(--accent);
       font-size: 12px;
       font-weight: 900;
-      letter-spacing: .16em;
+      letter-spacing: 0;
       text-transform: uppercase;
       margin: 0 0 10px;
     }
     .media-overlay h2 {
       margin: 0;
       max-width: 520px;
-      font-size: clamp(34px, 5vw, 58px);
-      line-height: .94;
-      letter-spacing: -0.05em;
+      color: #fffdf5;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 45px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+    .floating-proof {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      width: min(260px, calc(100% - 36px));
+      display: grid;
+      gap: 6px;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, .44);
+      color: #fffdf5;
+      padding: 14px;
+      backdrop-filter: blur(12px);
+    }
+    .floating-proof strong {
+      font-size: 13px;
+    }
+    .floating-proof span {
+      color: rgba(255,255,255,.78);
+      font-size: 12px;
+      line-height: 1.45;
     }
     .toolbar, .metrics {
       display: grid;
@@ -906,19 +1005,19 @@ function buildPreviewHtml(input: {
       gap: 10px;
     }
     .toolbar span, .metrics div, .feature, .timeline p, .edit-log {
-      border: 1px solid rgba(255,255,255,.09);
-      background: rgba(255,255,255,.045);
-      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 8px;
       padding: 14px;
     }
     .metrics { margin: 18px 0; }
     .metrics strong {
       display: block;
-      font-size: clamp(24px, 4vw, 34px);
-      letter-spacing: -0.04em;
+      font-size: 30px;
+      letter-spacing: 0;
     }
     .metrics span, .timeline span {
-      color: ${input.palette.muted};
+      color: var(--muted);
       font-size: 12px;
       font-weight: 700;
     }
@@ -936,9 +1035,10 @@ function buildPreviewHtml(input: {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
+      margin: 10px 0 64px;
     }
     .feature span {
-      color: ${input.palette.secondary};
+      color: var(--accent);
       font-size: 12px;
       font-weight: 900;
     }
@@ -949,47 +1049,51 @@ function buildPreviewHtml(input: {
     }
     .feature p {
       margin: 0;
-      color: ${input.palette.muted};
+      color: var(--muted);
       line-height: 1.5;
       font-size: 13px;
     }
     .edit-log {
       margin-top: 16px;
-      color: ${input.palette.muted};
+      color: var(--muted);
       font-size: 13px;
       line-height: 1.5;
     }
     .edit-log strong {
-      color: ${input.palette.text};
+      color: var(--text);
     }
     .story {
       display: grid;
       grid-template-columns: minmax(0, .85fr) minmax(0, 1fr);
-      gap: 18px;
+      gap: 22px;
       align-items: stretch;
+      border-top: 1px solid var(--line);
+      padding-top: 34px;
     }
     .story img {
       width: 100%;
       min-height: 360px;
       height: 100%;
       object-fit: cover;
-      border-radius: 22px;
-      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
     }
     .story-panel {
-      border: 1px solid rgba(255,255,255,.1);
-      border-radius: 22px;
-      padding: clamp(22px, 4vw, 38px);
-      background: rgba(0,0,0,.46);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 34px;
+      background: var(--surface);
     }
     .story-panel h2 {
       margin: 0;
-      font-size: clamp(32px, 5vw, 62px);
-      line-height: .95;
-      letter-spacing: -0.05em;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 44px;
+      line-height: 1;
+      letter-spacing: 0;
     }
     .story-panel p {
-      color: ${input.palette.muted};
+      color: var(--muted);
       line-height: 1.7;
       font-size: 16px;
     }
@@ -998,23 +1102,27 @@ function buildPreviewHtml(input: {
       display: grid;
       gap: 10px;
     }
-    .contact-card a, .contact-card span {
-      border: 1px solid rgba(255,255,255,.1);
-      border-radius: 14px;
+    .contact-card span {
+      border: 1px solid var(--line);
+      border-radius: 8px;
       padding: 13px 14px;
-      color: ${input.palette.text};
-      background: rgba(255,255,255,.05);
-      text-decoration: none;
+      color: var(--text);
+      background: var(--surface-strong);
       font-weight: 800;
     }
     .credit {
-      color: ${input.palette.muted};
+      color: var(--muted);
       font-size: 11px;
       margin-top: 12px;
     }
     footer {
-      color: ${input.palette.muted};
+      margin-top: 30px;
+      color: var(--muted);
       font-size: 13px;
+    }
+    @media (max-width: 1080px) {
+      h1 { font-size: 56px; }
+      .media-overlay h2 { font-size: 38px; }
     }
     @media (max-width: 860px) {
       .hero { grid-template-columns: 1fr; }
@@ -1023,6 +1131,10 @@ function buildPreviewHtml(input: {
       nav { display: none; }
       .toolbar, .metrics { grid-template-columns: 1fr; }
       .timeline p { flex-direction: column; }
+      h1 { font-size: 42px; }
+      .hero { min-height: auto; padding-top: 26px; }
+      .media-card { min-height: 430px; }
+      .story-panel h2 { font-size: 34px; }
     }
   </style>
 </head>
@@ -1030,7 +1142,7 @@ function buildPreviewHtml(input: {
   <main class="page">
     <header>
       <div class="brand">${escapedName}</div>
-      <nav><span>Servicos</span><span>Resultados</span><span>Agenda</span></nav>
+      <nav>${navItems}</nav>
       ${contact.primary ? `<a class="nav-cta" href="${contact.primaryHref}">${contact.primary}</a>` : ""}
     </header>
     <section class="hero">
@@ -1053,16 +1165,12 @@ function buildPreviewHtml(input: {
       ${productSurface}
     </section>
     <section id="servicos" class="features">${featureCards}</section>
-    <section class="story">
+    <section id="contato" class="story">
       <img src="${media.tertiary}" alt="${escapeHtml(media.tertiaryAlt)}" referrerpolicy="no-referrer" />
       <div class="story-panel">
         <h2>${escapeHtml(profile.storyTitle)}</h2>
         <p>${escapeHtml(profile.storyText)}</p>
-        <div class="contact-card">
-          ${contact.whatsapp ? `<a href="${contact.whatsappHref}">${escapeHtml(contact.whatsapp)}</a>` : ""}
-          ${contact.email ? `<a href="mailto:${escapeHtml(contact.email)}">${escapeHtml(contact.email)}</a>` : ""}
-          ${!contact.whatsapp && !contact.email ? `<span>Adicione telefone ou email para ativar CTAs reais.</span>` : ""}
-        </div>
+        <div class="contact-card">${contactRows}</div>
         <p class="credit">Imagens gratuitas via Unsplash. ${escapeHtml(media.credit)}</p>
       </div>
     </section>
@@ -1086,16 +1194,13 @@ function buildContact(brief?: ProjectBrief) {
   const phone = brief?.phoneWhatsapp?.trim();
   const digits = phone?.replace(/\D/g, "") ?? "";
   const hasWhatsapp = digits.length >= 10;
-  const whatsappHref = hasWhatsapp
-    ? `https://wa.me/${digits}`
-    : "#servicos";
   const email = brief?.email?.trim();
 
   return {
     primary: hasWhatsapp ? "Agendar pelo WhatsApp" : email ? "Enviar email" : "Ver servicos",
-    primaryHref: hasWhatsapp ? whatsappHref : email ? `mailto:${email}` : "#servicos",
+    primaryHref: hasWhatsapp || email ? "#contato" : "#servicos",
     whatsapp: phone ? `WhatsApp: ${phone}` : "",
-    whatsappHref,
+    whatsappHref: "#contato",
     email: email ?? "",
   };
 }
@@ -1103,6 +1208,38 @@ function buildContact(brief?: ProjectBrief) {
 function getNicheMedia(industry: string) {
   const normalized = normalize(industry);
   const images = {
+    padarias: {
+      hero: "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1800&q=82",
+      secondary: "https://images.unsplash.com/photo-1517433367423-c7e5b0f35086?auto=format&fit=crop&w=1200&q=82",
+      tertiary: "https://images.unsplash.com/photo-1517433670267-08bbd4be890f?auto=format&fit=crop&w=1200&q=82",
+      secondaryAlt: "Paes artesanais em vitrine de padaria",
+      tertiaryAlt: "Balcao de padaria com produtos frescos",
+      credit: "Bakery photos from Unsplash.",
+    },
+    "clinicas odontologicas": {
+      hero: "https://images.unsplash.com/photo-1606811971618-4486d14f3f99?auto=format&fit=crop&w=1800&q=82",
+      secondary: "https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&w=1200&q=82",
+      tertiary: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=82",
+      secondaryAlt: "Consultorio odontologico moderno",
+      tertiaryAlt: "Atendimento odontologico profissional",
+      credit: "Dental clinic photos from Unsplash.",
+    },
+    "oficinas mecanicas": {
+      hero: "https://images.unsplash.com/photo-1487754180451-c456f719a1fc?auto=format&fit=crop&w=1800&q=82",
+      secondary: "https://images.unsplash.com/photo-1625047509248-ec889cbff17f?auto=format&fit=crop&w=1200&q=82",
+      tertiary: "https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=1200&q=82",
+      secondaryAlt: "Mecanico trabalhando em manutencao automotiva",
+      tertiaryAlt: "Carro em oficina mecanica",
+      credit: "Auto repair photos from Unsplash.",
+    },
+    "lojas de roupas": {
+      hero: "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1800&q=82",
+      secondary: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=82",
+      tertiary: "https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=1200&q=82",
+      secondaryAlt: "Araras de roupas em loja de moda",
+      tertiaryAlt: "Editorial de moda para loja de roupas",
+      credit: "Fashion retail photos from Unsplash.",
+    },
     barbearias: {
       hero: "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?auto=format&fit=crop&w=1800&q=82",
       secondary: "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=1200&q=82",
@@ -1160,6 +1297,10 @@ function getNicheMedia(industry: string) {
     credit: string;
   }>;
 
+  if (normalized.includes("padaria")) return images.padarias;
+  if (normalized.includes("odont")) return images["clinicas odontologicas"];
+  if (normalized.includes("oficina") || normalized.includes("mecanica")) return images["oficinas mecanicas"];
+  if (normalized.includes("roupa") || normalized.includes("moda")) return images["lojas de roupas"];
   if (normalized.includes("barbearia")) return images.barbearias;
   if (normalized.includes("restaurante")) return images.restaurantes;
   if (normalized.includes("academia")) return images.academias;
@@ -1173,6 +1314,139 @@ function getNicheProfile(industry: string, name: string) {
   const normalized = normalize(industry);
   const safeName = titleCase(name);
 
+  const darkTheme = {
+    mode: "dark",
+    background: "#0b0d0c",
+    surface: "rgba(16, 18, 16, .88)",
+    surfaceStrong: "#151814",
+    text: "#fffdf5",
+    muted: "#c9c1ae",
+    line: "rgba(255, 255, 255, .14)",
+    header: "rgba(9, 10, 9, .74)",
+    accentSoft: "rgba(255, 255, 255, .08)",
+    shadow: "0 28px 80px rgba(0, 0, 0, .34)",
+  };
+
+  const warmTheme = {
+    mode: "light",
+    background: "#fbf4e8",
+    surface: "rgba(255, 252, 246, .9)",
+    surfaceStrong: "#ffffff",
+    text: "#28180d",
+    muted: "#6f5b45",
+    line: "rgba(80, 48, 22, .16)",
+    header: "rgba(255, 252, 246, .82)",
+    accentSoft: "#fff0d3",
+    shadow: "0 24px 70px rgba(99, 58, 19, .18)",
+  };
+
+  const cleanTheme = {
+    mode: "light",
+    background: "#eef8fb",
+    surface: "rgba(255, 255, 255, .9)",
+    surfaceStrong: "#ffffff",
+    text: "#10262d",
+    muted: "#557078",
+    line: "rgba(16, 38, 45, .13)",
+    header: "rgba(255, 255, 255, .82)",
+    accentSoft: "#dff8fb",
+    shadow: "0 24px 70px rgba(20, 83, 95, .14)",
+  };
+
+  const fashionTheme = {
+    mode: "light",
+    background: "#f5f2ee",
+    surface: "rgba(255, 255, 255, .9)",
+    surfaceStrong: "#ffffff",
+    text: "#1f1d1a",
+    muted: "#665f57",
+    line: "rgba(31, 29, 26, .14)",
+    header: "rgba(255, 255, 255, .82)",
+    accentSoft: "#f0e2d7",
+    shadow: "0 24px 70px rgba(55, 45, 35, .14)",
+  };
+
+  const garageTheme = {
+    mode: "dark",
+    background: "#101315",
+    surface: "rgba(22, 25, 27, .9)",
+    surfaceStrong: "#1b2023",
+    text: "#fffaf0",
+    muted: "#c1b9aa",
+    line: "rgba(255, 255, 255, .13)",
+    header: "rgba(14, 16, 18, .78)",
+    accentSoft: "rgba(255, 199, 104, .12)",
+    shadow: "0 28px 80px rgba(0, 0, 0, .38)",
+  };
+
+  if (normalized.includes("padaria")) {
+    return {
+      kicker: "fornada artesanal",
+      headline: `${safeName}: paes frescos, cafe e encomendas todos os dias`,
+      cardTitle: "Cheiro de pao quente, vitrine clara e pedido rapido",
+      storyTitle: "Uma vitrine digital que abre o apetite",
+      storyText:
+        "O layout valoriza foto real de produtos, horarios, encomendas e chamada de contato. A pagina fica com cara de padaria local forte, nao de template vazio.",
+      description:
+        "Mostre paes, doces, lanches e encomendas com uma pagina acolhedora, visual e pronta para transformar visitantes em pedidos.",
+      proofPoints: ["Fornada do dia", "Encomendas", "Cafe e lanches", "Contato rapido"],
+      navItems: ["Produtos", "Encomendas", "Contato"],
+      testimonial: "Clientes encontram a fornada, escolhem o pedido e chamam sem sair do preview.",
+      theme: warmTheme,
+    };
+  }
+
+  if (normalized.includes("odont")) {
+    return {
+      kicker: "odontologia de confianca",
+      headline: `${safeName}: sorrisos cuidados com agenda simples`,
+      cardTitle: "Clinica limpa, equipe visivel e chamada clara para consulta",
+      storyTitle: "Credibilidade antes do agendamento",
+      storyText:
+        "O site prioriza ambiente clinico, tratamentos, diferenciais e contato. A pessoa entende a especialidade e sabe exatamente como marcar uma avaliacao.",
+      description:
+        "Apresente tratamentos, estrutura, equipe e agendamento com visual limpo, confiavel e adaptado para clinicas odontologicas.",
+      proofPoints: ["Avaliacao", "Tratamentos", "Equipe", "Agenda"],
+      navItems: ["Tratamentos", "Equipe", "Contato"],
+      testimonial: "O primeiro clique ja mostra cuidado, organizacao e caminho direto para consulta.",
+      theme: cleanTheme,
+    };
+  }
+
+  if (normalized.includes("oficina") || normalized.includes("mecanica")) {
+    return {
+      kicker: "oficina mecanica",
+      headline: `${safeName}: manutencao automotiva com diagnostico claro`,
+      cardTitle: "Servico tecnico, prazos combinados e confianca visual",
+      storyTitle: "O cliente entende o servico antes de chegar",
+      storyText:
+        "A pagina destaca revisao, diagnostico, freios, suspensao e contato. O visual passa precisao e evita o aspecto generico de anuncio simples.",
+      description:
+        "Crie uma presenca forte para revisoes, manutencao e orcamentos com imagem real, prova de confianca e CTA objetivo.",
+      proofPoints: ["Diagnostico", "Revisao", "Orcamento", "Garantia"],
+      navItems: ["Servicos", "Diagnostico", "Contato"],
+      testimonial: "A oficina parece tecnica, organizada e pronta para receber pedidos de orcamento.",
+      theme: garageTheme,
+    };
+  }
+
+  if (normalized.includes("roupa") || normalized.includes("moda")) {
+    return {
+      kicker: "moda e estilo",
+      headline: `${safeName}: colecoes, looks e compra com identidade`,
+      cardTitle: "Editorial forte, produtos em destaque e marca memoravel",
+      storyTitle: "Um site que vende estilo, nao so produtos",
+      storyText:
+        "A estrutura aproxima vitrine, colecao, prova social e contato. O resultado fica mais parecido com uma loja de moda real do que uma lista comum de cards.",
+      description:
+        "Mostre colecoes, pecas em destaque e diferenciais com visual editorial, fotos de moda e CTA para compra ou atendimento.",
+      proofPoints: ["Colecoes", "Looks", "Vitrine", "Atendimento"],
+      navItems: ["Colecao", "Looks", "Contato"],
+      testimonial: "A marca ganha uma primeira dobra editorial com imagem grande e produtos claros.",
+      theme: fashionTheme,
+    };
+  }
+
   if (normalized.includes("barbearia")) {
     return {
       kicker: "barbearia premium",
@@ -1184,20 +1458,26 @@ function getNicheProfile(industry: string, name: string) {
       description:
         "Apresente cortes, barba, horarios e diferenciais com visual premium, imagem forte e botao direto para agendamento.",
       proofPoints: ["Agenda rapida", "Servicos claros", "Prova social", "WhatsApp em destaque"],
+      navItems: ["Servicos", "Agenda", "Contato"],
+      testimonial: "A primeira tela mostra estilo, confianca e caminho direto para reservar horario.",
+      theme: darkTheme,
     };
   }
 
   if (normalized.includes("restaurante")) {
     return {
       kicker: "restaurante",
-      headline: `${safeName}: reserve, conheca o cardapio e venha hoje`,
-      cardTitle: "Atmosfera, pratos e reserva em uma experiencia direta",
+      headline: `${safeName}: pratos marcantes, reserva facil e sabor de casa`,
+      cardTitle: "Atmosfera, cardapio e reserva em uma experiencia direta",
       storyTitle: "Cardapio e reserva no mesmo fluxo",
       storyText:
         "O site mostra ambiente, pratos, horarios e contato sem esconder a acao principal: reservar mesa ou chamar no WhatsApp.",
       description:
         "Mostre pratos, ambiente e reservas com uma pagina visual, rapida e feita para converter visitantes em clientes.",
       proofPoints: ["Reservas", "Cardapio visual", "Ambiente", "Contato facil"],
+      navItems: ["Cardapio", "Reservas", "Contato"],
+      testimonial: "O visitante sente o clima do restaurante antes de escolher como reservar.",
+      theme: warmTheme,
     };
   }
 
@@ -1212,6 +1492,9 @@ function getNicheProfile(industry: string, name: string) {
       description:
         "Crie uma presenca forte para planos, aulas, horarios e captacao de alunos com visual esportivo.",
       proofPoints: ["Planos", "Aulas", "Resultados", "Matricula rapida"],
+      navItems: ["Planos", "Aulas", "Contato"],
+      testimonial: "O preview combina energia, planos e conversao sem formulario pesado.",
+      theme: darkTheme,
     };
   }
 
@@ -1225,6 +1508,9 @@ function getNicheProfile(industry: string, name: string) {
     description:
       "Site profissional com imagem real do nicho, secoes objetivas, prova social e chamada de contato clara.",
     proofPoints: ["Imagem real", "Copy objetiva", "Servicos", "Contato facil"],
+    navItems: ["Servicos", "Resultados", "Contato"],
+    testimonial: "A primeira versao ja nasce com imagem, proposta e caminho claro para contato.",
+    theme: fashionTheme,
   };
 }
 
