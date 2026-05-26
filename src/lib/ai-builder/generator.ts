@@ -635,43 +635,7 @@ function buildFiles(
   const wantsPayment = features.some((feature) => normalize(feature).includes("pagamento"));
   const wantsDashboard = kind === "saas" || kind === "dashboard";
 
-  const files: BuilderFile[] = [
-    {
-      path: "src/app/page.tsx",
-      language: "tsx",
-      description: "Pagina inicial gerada com a experiencia principal.",
-      content: `import { ${componentName(name)} } from "@/components/generated/${slug}";\n\nexport default function Page() {\n  return <${componentName(name)} />;\n}`,
-    },
-    {
-      path: `src/components/generated/${slug}.tsx`,
-      language: "tsx",
-      description: "Componentes reutilizaveis para hero, secoes, CTA e cards.",
-      content: `import { generatedConfig } from "@/lib/generated/${slug}-config";\n\nexport function ${componentName(name)}() {\n  return (\n    <main>\n      <h1>{generatedConfig.name}</h1>\n      <p>{generatedConfig.summary}</p>\n    </main>\n  );\n}`,
-    },
-    {
-      path: `src/lib/generated/${slug}-config.ts`,
-      language: "ts",
-      description: "Configuracao do produto, recursos e textos principais.",
-      content: `export const generatedConfig = ${JSON.stringify(
-        {
-          name,
-          kind,
-          summary: prompt,
-          contact: brief
-            ? {
-                phoneWhatsapp: brief.phoneWhatsapp,
-                email: brief.email,
-                niche: brief.niche,
-                primaryColor: brief.primaryColor,
-              }
-            : undefined,
-          features,
-        },
-        null,
-        2,
-      )};`,
-    },
-  ];
+  const files: BuilderFile[] = buildGeneratedNextFiles(name, kind, features, prompt, brief);
 
   files.push(...getReusableTemplateFiles(slug));
 
@@ -710,6 +674,791 @@ function buildFiles(
   });
 
   return files;
+}
+
+function buildGeneratedNextFiles(
+  name: string,
+  kind: BuilderProject["kind"],
+  features: string[],
+  prompt: string,
+  brief?: ProjectBrief,
+): BuilderFile[] {
+  const slug = slugify(name);
+  const component = componentName(name);
+
+  return [
+    {
+      path: "src/app/page.tsx",
+      language: "tsx",
+      description: "Página inicial Next.js que renderiza o site gerado.",
+      content: `import { ${component} } from "@/components/generated/${slug}";
+
+export default function Page() {
+  return <${component} />;
+}
+`,
+    },
+    {
+      path: `src/components/generated/${slug}/index.tsx`,
+      language: "tsx",
+      description: "Composição principal do site com estado editável simples.",
+      content: buildGeneratedSiteIndexSource(slug, component),
+    },
+    {
+      path: `src/components/generated/${slug}/Header.tsx`,
+      language: "tsx",
+      description: "Cabeçalho fixo com menu, marca e botão real de WhatsApp.",
+      content: buildGeneratedHeaderSource(slug),
+    },
+    {
+      path: `src/components/generated/${slug}/Hero.tsx`,
+      language: "tsx",
+      description: "Hero responsivo com título, subtítulo, imagem e CTAs únicos.",
+      content: buildGeneratedHeroSource(slug),
+    },
+    {
+      path: `src/components/generated/${slug}/Features.tsx`,
+      language: "tsx",
+      description: "Seções de sobre, diferenciais, produtos, destaque e depoimentos.",
+      content: buildGeneratedFeaturesSource(slug),
+    },
+    {
+      path: `src/components/generated/${slug}/ContactSection.tsx`,
+      language: "tsx",
+      description: "Contato responsivo com WhatsApp, e-mail, endereço, horário e mapa.",
+      content: buildGeneratedContactSectionSource(slug),
+    },
+    {
+      path: `src/components/generated/${slug}/Footer.tsx`,
+      language: "tsx",
+      description: "Rodapé com links rápidos, redes sociais e copyright.",
+      content: buildGeneratedFooterSource(slug),
+    },
+    {
+      path: `src/components/generated/${slug}/SiteEditor.tsx`,
+      language: "tsx",
+      description: "Editor visual simples para textos, cores, contato e imagens.",
+      content: buildGeneratedSiteEditorSource(slug),
+    },
+    {
+      path: `src/lib/generated/${slug}-config.ts`,
+      language: "ts",
+      description: "Configuração editável do site com textos, cores, imagens, contato e produtos.",
+      content: buildGeneratedConfigSource(name, kind, features, prompt, brief),
+    },
+  ];
+}
+
+function buildGeneratedSiteIndexSource(slug: string, component: string) {
+  return `"use client";
+
+import type { CSSProperties } from "react";
+import { useMemo, useState } from "react";
+import { generatedSiteConfig, type GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
+import { ContactSection } from "./ContactSection";
+import { Features } from "./Features";
+import { Footer } from "./Footer";
+import { Header } from "./Header";
+import { Hero } from "./Hero";
+import { SiteEditor } from "./SiteEditor";
+
+export function ${component}() {
+  const [site, setSite] = useState<GeneratedSiteConfig>(generatedSiteConfig);
+
+  const whatsappHref = useMemo(() => {
+    const digits = site.contact.whatsapp.replace(/\\D/g, "");
+
+    if (digits.length < 10) {
+      return "#contato";
+    }
+
+    return "https://wa.me/" + digits + "?text=" + encodeURIComponent(site.whatsappMessage);
+  }, [site.contact.whatsapp, site.whatsappMessage]);
+
+  function updateSite<Key extends keyof GeneratedSiteConfig>(
+    key: Key,
+    value: GeneratedSiteConfig[Key],
+  ) {
+    setSite((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  return (
+    <main
+      className="min-h-screen bg-[var(--site-bg)] text-[var(--site-text)]"
+      style={
+        {
+          "--site-bg": site.theme.background,
+          "--site-card": site.theme.card,
+          "--site-primary": site.theme.primary,
+          "--site-secondary": site.theme.secondary,
+          "--site-text": site.theme.text,
+          "--site-muted": site.theme.muted,
+        } as CSSProperties
+      }
+    >
+      <Header site={site} whatsappHref={whatsappHref} />
+      <Hero site={site} whatsappHref={whatsappHref} />
+      <Features site={site} whatsappHref={whatsappHref} />
+      <ContactSection site={site} whatsappHref={whatsappHref} />
+      <Footer site={site} />
+      <SiteEditor site={site} onUpdate={updateSite} />
+    </main>
+  );
+}
+`;
+}
+
+function buildGeneratedHeaderSource(slug: string) {
+  return `import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
+
+type HeaderProps = {
+  site: GeneratedSiteConfig;
+  whatsappHref: string;
+};
+
+export function Header({ site, whatsappHref }: HeaderProps) {
+  const isExternalWhatsapp = whatsappHref.startsWith("https://");
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-black/10 bg-white/85 backdrop-blur-xl">
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+        <a className="text-base font-black tracking-tight text-zinc-950 sm:text-lg" href="#inicio">
+          {site.name}
+        </a>
+        <nav className="hidden items-center gap-5 text-sm font-semibold text-zinc-700 lg:flex">
+          {site.navigation.map((item) => (
+            <a className="transition hover:text-zinc-950" href={item.href} key={item.href}>
+              {item.label}
+            </a>
+          ))}
+        </nav>
+        <a
+          className="rounded-full bg-[var(--site-primary)] px-4 py-2 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+          href={whatsappHref}
+          rel={isExternalWhatsapp ? "noreferrer" : undefined}
+          target={isExternalWhatsapp ? "_blank" : undefined}
+        >
+          Fazer pedido
+        </a>
+      </div>
+    </header>
+  );
+}
+`;
+}
+
+function buildGeneratedHeroSource(slug: string) {
+  return `import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
+
+type HeroProps = {
+  site: GeneratedSiteConfig;
+  whatsappHref: string;
+};
+
+export function Hero({ site, whatsappHref }: HeroProps) {
+  const isExternalWhatsapp = whatsappHref.startsWith("https://");
+
+  return (
+    <section className="mx-auto grid w-full max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:px-8" id="inicio">
+      <div>
+        <p className="text-sm font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">
+          {site.hero.eyebrow}
+        </p>
+        <h1 className="mt-4 max-w-3xl text-4xl font-black leading-tight tracking-tight text-zinc-950 sm:text-6xl">
+          {site.hero.title}
+        </h1>
+        <p className="mt-5 max-w-2xl text-lg leading-8 text-[var(--site-muted)]">
+          {site.hero.subtitle}
+        </p>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <a
+            className="inline-flex items-center justify-center rounded-full bg-[var(--site-primary)] px-6 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+            href={whatsappHref}
+            rel={isExternalWhatsapp ? "noreferrer" : undefined}
+            target={isExternalWhatsapp ? "_blank" : undefined}
+          >
+            {site.hero.primaryCta}
+          </a>
+          <a
+            className="inline-flex items-center justify-center rounded-full border border-zinc-300 bg-white px-6 py-3 text-sm font-black text-zinc-950 transition hover:border-zinc-950"
+            href="#produtos"
+          >
+            {site.hero.secondaryCta}
+          </a>
+        </div>
+      </div>
+      <div className="relative overflow-hidden rounded-[2rem] bg-zinc-200 shadow-2xl shadow-black/10">
+        <img
+          alt={site.images.heroAlt}
+          className="h-[360px] w-full object-cover sm:h-[500px]"
+          src={site.images.hero}
+        />
+        <div className="absolute bottom-4 left-4 right-4 rounded-2xl bg-white/90 p-4 shadow-lg backdrop-blur">
+          <p className="text-sm font-black text-zinc-950">{site.hero.cardTitle}</p>
+          <p className="mt-1 text-sm text-zinc-600">{site.hero.cardText}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+`;
+}
+
+function buildGeneratedFeaturesSource(slug: string) {
+  return `import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
+
+type FeaturesProps = {
+  site: GeneratedSiteConfig;
+  whatsappHref: string;
+};
+
+export function Features({ site, whatsappHref }: FeaturesProps) {
+  const isExternalWhatsapp = whatsappHref.startsWith("https://");
+
+  return (
+    <>
+      <section className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8" id="sobre">
+        <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">Sobre</p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-5xl">
+              {site.about.title}
+            </h2>
+            <p className="mt-4 text-base leading-8 text-[var(--site-muted)]">{site.about.text}</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {site.differentials.map((item) => (
+              <article className="rounded-2xl bg-[var(--site-card)] p-5 shadow-sm ring-1 ring-black/5" key={item.title}>
+                <h3 className="text-lg font-black text-zinc-950">{item.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-[var(--site-muted)]">{item.text}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8" id="produtos">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">Produtos</p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-5xl">
+              {site.productsTitle}
+            </h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {site.categories.map((category) => (
+              <span className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-black text-zinc-700" key={category}>
+                {category}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {site.products.map((product) => (
+            <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5" key={product.name}>
+              <img alt={product.imageAlt} className="h-48 w-full object-cover" src={product.image} />
+              <div className="p-5">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--site-primary)]">{product.category}</p>
+                <h3 className="mt-2 text-xl font-black text-zinc-950">{product.name}</h3>
+                <p className="mt-2 text-sm leading-6 text-[var(--site-muted)]">{product.description}</p>
+                <p className="mt-4 text-lg font-black text-zinc-950">{product.price}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8" id="cardapio">
+        <div className="grid overflow-hidden rounded-[2rem] bg-[var(--site-secondary)] text-white lg:grid-cols-[1fr_0.8fr]">
+          <div className="p-8 sm:p-12">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-white/70">Destaque</p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">{site.promo.title}</h2>
+            <p className="mt-4 max-w-2xl text-base leading-8 text-white/80">{site.promo.text}</p>
+            <a
+              className="mt-8 inline-flex rounded-full bg-white px-6 py-3 text-sm font-black text-zinc-950 transition hover:-translate-y-0.5"
+              href={whatsappHref}
+              rel={isExternalWhatsapp ? "noreferrer" : undefined}
+              target={isExternalWhatsapp ? "_blank" : undefined}
+            >
+              {site.promo.cta}
+            </a>
+          </div>
+          <img alt={site.images.promoAlt} className="h-full min-h-[320px] w-full object-cover" src={site.images.promo} />
+        </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8" id="depoimentos">
+        <p className="text-sm font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">Depoimentos</p>
+        <h2 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-5xl">
+          Clientes satisfeitos
+        </h2>
+        <div className="mt-8 grid gap-5 md:grid-cols-3">
+          {site.testimonials.map((testimonial) => (
+            <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5" key={testimonial.name}>
+              <p className="text-sm font-black text-[var(--site-primary)]">{testimonial.rating}</p>
+              <p className="mt-4 text-sm leading-7 text-[var(--site-muted)]">“{testimonial.comment}”</p>
+              <h3 className="mt-5 font-black text-zinc-950">{testimonial.name}</h3>
+            </article>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+`;
+}
+
+function buildGeneratedContactSectionSource(slug: string) {
+  return `import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
+
+type ContactSectionProps = {
+  site: GeneratedSiteConfig;
+  whatsappHref: string;
+};
+
+export function ContactSection({ site, whatsappHref }: ContactSectionProps) {
+  const isExternalWhatsapp = whatsappHref.startsWith("https://");
+
+  return (
+    <section className="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 lg:px-8" id="contato">
+      <div className="grid gap-8 rounded-[2rem] bg-white p-6 shadow-sm ring-1 ring-black/5 sm:p-8 lg:grid-cols-[0.9fr_1.1fr]">
+        <div>
+          <p className="text-sm font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">Contato</p>
+          <h2 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-5xl">
+            Peça pelo WhatsApp ou visite a loja
+          </h2>
+          <div className="mt-6 grid gap-3 text-sm text-zinc-700">
+            <p><strong>WhatsApp:</strong> {site.contact.whatsapp}</p>
+            <p><strong>E-mail:</strong> {site.contact.email}</p>
+            <p><strong>Endereço:</strong> {site.contact.address}</p>
+            <p><strong>Horário:</strong> {site.contact.hours}</p>
+          </div>
+          <a
+            className="mt-8 inline-flex rounded-full bg-[var(--site-primary)] px-6 py-3 text-sm font-black text-white transition hover:-translate-y-0.5"
+            href={whatsappHref}
+            rel={isExternalWhatsapp ? "noreferrer" : undefined}
+            target={isExternalWhatsapp ? "_blank" : undefined}
+          >
+            Chamar no WhatsApp
+          </a>
+        </div>
+        <div className="grid min-h-[320px] place-items-center overflow-hidden rounded-2xl bg-zinc-100 text-center">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-zinc-500">Mapa</p>
+            <p className="mt-2 max-w-sm text-sm leading-6 text-zinc-600">
+              Espaço pronto para incorporar Google Maps ou outro mapa do endereço.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+`;
+}
+
+function buildGeneratedFooterSource(slug: string) {
+  return `import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
+
+export function Footer({ site }: { site: GeneratedSiteConfig }) {
+  return (
+    <footer className="border-t border-black/10 bg-zinc-950 px-4 py-10 text-white sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-7xl flex-col justify-between gap-8 md:flex-row md:items-center">
+        <div>
+          <p className="text-xl font-black">{site.name}</p>
+          <p className="mt-2 text-sm text-white/60">{site.footerText}</p>
+        </div>
+        <div className="flex flex-wrap gap-4 text-sm font-semibold text-white/70">
+          {site.navigation.map((item) => (
+            <a className="hover:text-white" href={item.href} key={item.href}>
+              {item.label}
+            </a>
+          ))}
+        </div>
+        <div className="flex gap-3 text-sm font-semibold text-white/70">
+          {site.social.map((item) => (
+            <a className="hover:text-white" href={item.href} key={item.label}>
+              {item.label}
+            </a>
+          ))}
+        </div>
+      </div>
+    </footer>
+  );
+}
+`;
+}
+
+function buildGeneratedSiteEditorSource(slug: string) {
+  return `"use client";
+
+import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
+
+type SiteEditorProps = {
+  site: GeneratedSiteConfig;
+  onUpdate: <Key extends keyof GeneratedSiteConfig>(
+    key: Key,
+    value: GeneratedSiteConfig[Key],
+  ) => void;
+};
+
+const inputClass =
+  "w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950 outline-none transition focus:border-zinc-950";
+
+export function SiteEditor({ site, onUpdate }: SiteEditorProps) {
+  function updateHero(field: keyof GeneratedSiteConfig["hero"], value: string) {
+    onUpdate("hero", { ...site.hero, [field]: value });
+  }
+
+  function updateTheme(field: keyof GeneratedSiteConfig["theme"], value: string) {
+    onUpdate("theme", { ...site.theme, [field]: value });
+  }
+
+  function updateImages(field: keyof GeneratedSiteConfig["images"], value: string) {
+    onUpdate("images", { ...site.images, [field]: value });
+  }
+
+  function updateContact(field: keyof GeneratedSiteConfig["contact"], value: string) {
+    onUpdate("contact", { ...site.contact, [field]: value });
+  }
+
+  return (
+    <aside className="fixed bottom-4 right-4 z-50 max-h-[82vh] w-[min(380px,calc(100vw-2rem))] overflow-auto rounded-2xl border border-black/10 bg-white/95 p-4 shadow-2xl backdrop-blur">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">Editor</p>
+          <h2 className="text-lg font-black text-zinc-950">Textos, cores e imagens</h2>
+        </div>
+        <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-500">ao vivo</span>
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        <label className="grid gap-1 text-xs font-bold text-zinc-600">
+          Título principal
+          <input className={inputClass} onChange={(event) => updateHero("title", event.target.value)} value={site.hero.title} />
+        </label>
+        <label className="grid gap-1 text-xs font-bold text-zinc-600">
+          Descrição principal
+          <textarea className={inputClass} onChange={(event) => updateHero("subtitle", event.target.value)} rows={3} value={site.hero.subtitle} />
+        </label>
+        <label className="grid gap-1 text-xs font-bold text-zinc-600">
+          Cor principal
+          <input className={inputClass} onChange={(event) => updateTheme("primary", event.target.value)} type="color" value={site.theme.primary} />
+        </label>
+        <label className="grid gap-1 text-xs font-bold text-zinc-600">
+          Imagem principal
+          <input className={inputClass} onChange={(event) => updateImages("hero", event.target.value)} value={site.images.hero} />
+        </label>
+        <label className="grid gap-1 text-xs font-bold text-zinc-600">
+          WhatsApp
+          <input className={inputClass} onChange={(event) => updateContact("whatsapp", event.target.value)} value={site.contact.whatsapp} />
+        </label>
+        <label className="grid gap-1 text-xs font-bold text-zinc-600">
+          E-mail
+          <input className={inputClass} onChange={(event) => updateContact("email", event.target.value)} value={site.contact.email} />
+        </label>
+      </div>
+    </aside>
+  );
+}
+`;
+}
+
+function buildGeneratedConfigSource(
+  name: string,
+  kind: BuilderProject["kind"],
+  features: string[],
+  prompt: string,
+  brief?: ProjectBrief,
+) {
+  const config = buildGeneratedConfig(name, kind, features, prompt, brief);
+
+  return `export type GeneratedSiteConfig = {
+  name: string;
+  kind: "saas" | "site" | "landing" | "dashboard";
+  niche: string;
+  whatsappMessage: string;
+  footerText: string;
+  theme: {
+    background: string;
+    card: string;
+    primary: string;
+    secondary: string;
+    text: string;
+    muted: string;
+  };
+  navigation: Array<{ label: string; href: string }>;
+  hero: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
+    primaryCta: string;
+    secondaryCta: string;
+    cardTitle: string;
+    cardText: string;
+  };
+  about: {
+    title: string;
+    text: string;
+  };
+  images: {
+    hero: string;
+    heroAlt: string;
+    promo: string;
+    promoAlt: string;
+  };
+  differentials: Array<{ title: string; text: string }>;
+  categories: string[];
+  productsTitle: string;
+  products: Array<{
+    category: string;
+    name: string;
+    description: string;
+    price: string;
+    image: string;
+    imageAlt: string;
+  }>;
+  promo: {
+    title: string;
+    text: string;
+    cta: string;
+  };
+  testimonials: Array<{ name: string; rating: string; comment: string }>;
+  contact: {
+    whatsapp: string;
+    email: string;
+    address: string;
+    hours: string;
+  };
+  social: Array<{ label: string; href: string }>;
+};
+
+export const generatedSiteConfig = ${JSON.stringify(config, null, 2)} satisfies GeneratedSiteConfig;
+`;
+}
+
+function buildGeneratedConfig(
+  name: string,
+  kind: BuilderProject["kind"],
+  features: string[],
+  prompt: string,
+  brief?: ProjectBrief,
+) {
+  const industry = detectIndustry(`${brief?.niche ?? ""} ${prompt}`);
+  const isBakery = normalize(industry).includes("padaria");
+  const media = getNicheMedia(industry);
+  const palette = brief?.primaryColor ? buildPaletteFromColor(brief.primaryColor, prompt) : pickPalette(prompt);
+  const siteName = titleCase(brief?.companyName ?? name);
+  const phone = brief?.phoneWhatsapp?.trim() || "5511999990000";
+  const email = brief?.email?.trim() || "contato@exemplo.com";
+  const nicheLabel = brief?.niche?.trim() || industry;
+  const differentials = isBakery
+    ? [
+        {
+          title: "Pães frescos",
+          text: "Fornadas ao longo do dia para entregar aroma, crocância e sabor de padaria de verdade.",
+        },
+        {
+          title: "Produção artesanal",
+          text: "Receitas preparadas com cuidado, fermentação correta e ingredientes selecionados.",
+        },
+        {
+          title: "Entrega rápida",
+          text: "Contato direto pelo WhatsApp para combinar retirada, entrega e pedidos especiais.",
+        },
+        {
+          title: "Qualidade garantida",
+          text: "Produtos organizados por categoria, com preço claro e padrão visual consistente.",
+        },
+      ]
+    : unique(features.slice(0, 4)).map((feature) => ({
+        title: feature,
+        text: buildFeatureText(feature),
+      }));
+
+  while (differentials.length < 4) {
+    differentials.push({
+      title: ["Atendimento rápido", "Visual profissional", "Conteúdo editável", "Contato direto"][differentials.length],
+      text: "Bloco reutilizável para manter o site claro, responsivo e pronto para evoluir.",
+    });
+  }
+
+  return {
+    name: siteName,
+    kind,
+    niche: nicheLabel,
+    whatsappMessage: `Olá, vim pelo site da ${siteName} e quero fazer um pedido.`,
+    footerText: `© ${new Date().getFullYear()} ${siteName}. Todos os direitos reservados.`,
+    theme: {
+      background: isBakery ? "#fff7ed" : palette.background,
+      card: isBakery ? "#ffffff" : palette.surface,
+      primary: palette.primary,
+      secondary: isBakery ? "#7c3f18" : palette.secondary,
+      text: isBakery ? "#28180d" : palette.text,
+      muted: isBakery ? "#765b43" : palette.muted,
+    },
+    navigation: [
+      { label: "Início", href: "#inicio" },
+      { label: "Sobre", href: "#sobre" },
+      { label: "Produtos", href: "#produtos" },
+      { label: "Cardápio", href: "#cardapio" },
+      { label: "Depoimentos", href: "#depoimentos" },
+      { label: "Contato", href: "#contato" },
+    ],
+    hero: {
+      eyebrow: isBakery ? "Padaria artesanal" : "Site profissional",
+      title: isBakery
+        ? `${siteName}: pães frescos e produção artesanal todos os dias`
+        : `${siteName}: presença digital pronta para converter`,
+      subtitle: isBakery
+        ? "Monte pedidos pelo WhatsApp, veja produtos com preço e conheça os diferenciais da padaria em uma página moderna e responsiva."
+        : "Site responsivo com proposta clara, imagens do nicho, prova social e contato direto para transformar visitas em oportunidades.",
+      primaryCta: isBakery ? "Pedir pelo WhatsApp" : "Chamar no WhatsApp",
+      secondaryCta: isBakery ? "Ver produtos" : "Ver serviços",
+      cardTitle: isBakery ? "Forno aberto cedo" : "Primeira versão editável",
+      cardText: isBakery
+        ? "Pães, bolos, doces, salgados e bebidas organizados para pedido rápido."
+        : "Textos, cores, contato e imagens podem ser ajustados no editor simples.",
+    },
+    about: {
+      title: isBakery ? "Tradição, frescor e atendimento próximo" : "Uma estrutura clara para vender melhor",
+      text: isBakery
+        ? `${siteName} combina produção artesanal, ingredientes selecionados e atendimento direto para quem quer comprar pães, bolos, doces e salgados sem complicação.`
+        : `${siteName} apresenta a empresa com uma experiência objetiva, responsiva e preparada para crescer com novas páginas, APIs e integrações.`,
+    },
+    images: {
+      hero: media.hero,
+      heroAlt: isBakery ? "Pães artesanais frescos em uma padaria" : media.secondaryAlt,
+      promo: media.secondary,
+      promoAlt: isBakery ? "Mesa com produtos de padaria e café" : media.tertiaryAlt,
+    },
+    differentials,
+    categories: isBakery
+      ? ["Pães", "Bolos", "Doces", "Salgados", "Bebidas"]
+      : ["Serviços", "Planos", "Resultados", "Contato"],
+    productsTitle: isBakery ? "Produtos mais pedidos" : "Serviços em destaque",
+    products: isBakery ? buildBakeryGeneratedProducts(media) : buildGenericGeneratedProducts(industry, media),
+    promo: {
+      title: isBakery ? "Combo do café da manhã" : "Oferta principal pronta para conversão",
+      text: isBakery
+        ? "Um combo com pão francês, pão de queijo, bolo caseiro, doce do dia e café para pedir em poucos cliques."
+        : "Bloco promocional para destacar o serviço mais importante e levar o visitante direto ao contato.",
+      cta: isBakery ? "Pedir combo no WhatsApp" : "Conversar agora",
+    },
+    testimonials: [
+      {
+        name: "Marina Costa",
+        rating: "★★★★★",
+        comment: isBakery
+          ? "Os pães chegam quentinhos e o atendimento pelo WhatsApp é muito rápido."
+          : "A página ficou clara, bonita e facilitou o contato dos clientes.",
+      },
+      {
+        name: "Rafael Lima",
+        rating: "★★★★★",
+        comment: isBakery
+          ? "O combo do café da manhã virou pedido fixo aqui em casa."
+          : "A estrutura ficou profissional e simples de atualizar.",
+      },
+      {
+        name: "Camila Rocha",
+        rating: "★★★★★",
+        comment: isBakery
+          ? "Gostei de ver produtos, preços e contato no mesmo lugar."
+          : "O site passa confiança logo na primeira tela.",
+      },
+    ],
+    contact: {
+      whatsapp: phone,
+      email,
+      address: "Rua Exemplo, 123 - Centro",
+      hours: isBakery ? "Segunda a sábado, das 6h às 20h" : "Segunda a sexta, das 9h às 18h",
+    },
+    social: [
+      { label: "Instagram", href: "#" },
+      { label: "Facebook", href: "#" },
+      { label: "WhatsApp", href: "#contato" },
+    ],
+  };
+}
+
+function buildBakeryGeneratedProducts(media: ReturnType<typeof getNicheMedia>) {
+  return [
+    {
+      category: "Pães",
+      name: "Pão francês",
+      description: "Casquinha crocante, miolo macio e fornada fresca todos os dias.",
+      price: "R$ 0,90",
+      image: media.hero,
+      imageAlt: "Pães franceses recém-assados",
+    },
+    {
+      category: "Bolos",
+      name: "Bolo caseiro",
+      description: "Massa fofinha com sabor de casa para acompanhar o café.",
+      price: "R$ 24,90",
+      image: media.secondary,
+      imageAlt: "Bolo caseiro em mesa de café",
+    },
+    {
+      category: "Doces",
+      name: "Sonho de creme",
+      description: "Doce leve, recheio cremoso e finalização com açúcar.",
+      price: "R$ 7,90",
+      image: "https://images.unsplash.com/photo-1517433670267-08bbd4be890f?auto=format&fit=crop&w=900&q=82",
+      imageAlt: "Doces de padaria em vitrine",
+    },
+    {
+      category: "Salgados",
+      name: "Pão de queijo",
+      description: "Porção dourada, macia por dentro e perfeita para o café.",
+      price: "R$ 5,90",
+      image: "https://images.unsplash.com/photo-1568254183919-78a4f43a2877?auto=format&fit=crop&w=900&q=82",
+      imageAlt: "Pão de queijo dourado servido quente",
+    },
+  ];
+}
+
+function buildGenericGeneratedProducts(industry: string, media: ReturnType<typeof getNicheMedia>) {
+  const label = titleCase(industry);
+
+  return [
+    {
+      category: "Essencial",
+      name: `Plano ${label}`,
+      description: "Apresentação clara do serviço principal com chamada de contato.",
+      price: "Sob consulta",
+      image: media.hero,
+      imageAlt: media.secondaryAlt,
+    },
+    {
+      category: "Profissional",
+      name: "Atendimento completo",
+      description: "Bloco para explicar benefícios, processo e próximos passos.",
+      price: "Sob consulta",
+      image: media.secondary,
+      imageAlt: media.secondaryAlt,
+    },
+    {
+      category: "Premium",
+      name: "Experiência personalizada",
+      description: "Oferta destacada para clientes que precisam de solução sob medida.",
+      price: "Sob consulta",
+      image: media.tertiary,
+      imageAlt: media.tertiaryAlt,
+    },
+    {
+      category: "Contato",
+      name: "Orçamento rápido",
+      description: "Caminho direto para WhatsApp, e-mail ou formulário de contato.",
+      price: "Grátis",
+      image: media.secondary,
+      imageAlt: media.secondaryAlt,
+    },
+  ];
 }
 
 function buildPreviewHtml(input: {
@@ -1892,17 +2641,17 @@ function getNicheProfile(industry: string, name: string) {
 function buildFeatureText(feature: string) {
   const normalized = normalize(feature);
   if (normalized.includes("pagamento")) return "Estrutura pronta para checkout, assinatura e webhooks.";
-  if (normalized.includes("autentic")) return "Fluxo preparado para rotas privadas, sessoes e banco.";
-  if (normalized.includes("dashboard")) return "Indicadores e modulos organizados para gestao diaria.";
-  if (normalized.includes("hero")) return "Primeiro impacto com mensagem direta e acao clara.";
-  if (normalized.includes("whatsapp")) return "Chamada rapida para contato e conversao.";
-  if (normalized.includes("catalogo")) return "Produtos com categoria, imagem, descricao e preco.";
-  if (normalized.includes("combo")) return "Bloco promocional pronto para pedido rapido.";
+  if (normalized.includes("autentic")) return "Fluxo preparado para rotas privadas, sessões e banco.";
+  if (normalized.includes("dashboard")) return "Indicadores e módulos organizados para gestão diária.";
+  if (normalized.includes("hero")) return "Primeiro impacto com mensagem direta e ação clara.";
+  if (normalized.includes("whatsapp")) return "Chamada rápida para contato e conversão.";
+  if (normalized.includes("catalogo")) return "Produtos com categoria, imagem, descrição e preço.";
+  if (normalized.includes("combo")) return "Bloco promocional pronto para pedido rápido.";
   if (normalized.includes("depoimento")) return "Prova social organizada em cards responsivos.";
-  if (normalized.includes("mapa")) return "Contato com endereco, horario e espaco para mapa.";
-  if (normalized.includes("agendamento")) return "Base para agenda, horarios e confirmacoes.";
-  if (normalized.includes("realtime")) return "Preparado para atualizacoes em tempo real.";
-  return "Bloco reutilizavel para evoluir o produto com consistencia.";
+  if (normalized.includes("mapa")) return "Contato com endereço, horário e espaço para mapa.";
+  if (normalized.includes("agendamento")) return "Base para agenda, horários e confirmações.";
+  if (normalized.includes("realtime")) return "Preparado para atualizações em tempo real.";
+  return "Bloco reutilizável para evoluir o produto com consistência.";
 }
 
 function estimateTokenCost(prompt: string, mode: BuilderAssistantResponse["mode"]) {
