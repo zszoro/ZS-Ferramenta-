@@ -1,10 +1,11 @@
 import { respondToBuilderMessage } from "@/lib/ai-builder/generator";
-import type { BuilderProject } from "@/lib/ai-builder/generator";
+import type { BuilderProject, ProjectBrief } from "@/lib/ai-builder/generator";
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     message?: string;
     project?: BuilderProject | null;
+    brief?: ProjectBrief | null;
   };
   const message = body.message?.trim();
 
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
   const result = respondToBuilderMessage({
     message,
     project: body.project ?? null,
+    brief: body.brief ?? null,
   });
 
   return Response.json({

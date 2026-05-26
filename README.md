@@ -6,12 +6,14 @@ Chat de IA para criar sites, SaaS e sistemas automaticamente com preview ao vivo
 
 - Tela inicial preta com grid neon, login/cadastro local e onboarding em 5 passos.
 - Chat principal para criar projetos e pedir edicoes em linguagem natural.
+- Botao `Criar projeto` com briefing inicial: nome da empresa, WhatsApp, email, nicho e cor principal.
 - Gerador local em `src/lib/ai-builder/generator.ts` com modos conversa, criacao e edicao.
 - API `POST /api/ai/chat` para conversar, criar e editar o projeto atual.
 - API `POST /api/ai/build` preservada para compatibilidade.
 - Conta local com 500 tokens iniciais, consumo por uso e reset semanal.
 - Modal de planos preparado para conectar Mercado Pago no backend.
 - Preview seguro via `iframe srcDoc` com `sandbox`.
+- Sites gerados usam imagens gratuitas do Unsplash por nicho quando ha correspondencia.
 - Preview redimensionavel, limite de metade da tela, desktop/mobile e tela cheia.
 - Arquivos sugeridos aparecem dentro do chat depois de cada geracao.
 

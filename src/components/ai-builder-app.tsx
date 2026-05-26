@@ -33,7 +33,11 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import type { BuilderAssistantResponse, BuilderProject } from "@/lib/ai-builder/generator";
+import type {
+  BuilderAssistantResponse,
+  BuilderProject,
+  ProjectBrief,
+} from "@/lib/ai-builder/generator";
 
 type Screen = "landing" | "onboarding" | "app";
 type AuthMode = "login" | "register";
@@ -168,7 +172,7 @@ const initialMessages: ChatMessage[] = [
   {
     id: "intro",
     role: "assistant",
-    text: "Oi, zs. Sou a IA da ZS Ferramenta. Posso criar um site do zero ou editar o preview atual pelo chat.",
+    text: "Oi, zs. Clique em Criar projeto para passar nome, nicho, cor e contato antes da geracao. Depois disso eu continuo editando o preview pelo chat.",
   },
 ];
 
@@ -195,6 +199,7 @@ export function AiBuilderApp() {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [tokensModalOpen, setTokensModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [projectBriefOpen, setProjectBriefOpen] = useState(false);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -353,6 +358,85 @@ export function AiBuilderApp() {
     }
   }
 
+  async function handleCreateProject(brief: ProjectBrief) {
+    if (isSending || !account) return;
+
+    if (account.tokens.remaining <= 0) {
+      setProjectBriefOpen(false);
+      setTokensModalOpen(true);
+      setChatError("Seus tokens acabaram. Escolha um plano ou aguarde o reset semanal.");
+      return;
+    }
+
+    const message = [
+      `Criar projeto para ${brief.companyName}.`,
+      `Nicho: ${brief.niche}.`,
+      `Cor principal: ${brief.primaryColor}.`,
+      brief.phoneWhatsapp ? `WhatsApp: ${brief.phoneWhatsapp}.` : "",
+      brief.email ? `Email: ${brief.email}.` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    setProjectBriefOpen(false);
+    setInput("");
+    setChatError(null);
+    setIsSending(true);
+    setMessages((current) => [
+      ...current,
+      {
+        id: `user-project-${Date.now()}`,
+        role: "user",
+        text: message,
+      },
+    ]);
+
+    try {
+      const response = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, project, brief }),
+      });
+      const payload = (await response.json()) as
+        | ({ ok: true } & BuilderAssistantResponse)
+        | { ok: false; error?: string };
+
+      if (!response.ok || !payload.ok) {
+        const responseError = "error" in payload ? payload.error : undefined;
+        throw new Error(responseError ?? "A IA nao conseguiu criar o projeto.");
+      }
+
+      persistAccount(deductTokens(account, payload.tokenCost ?? 44));
+
+      if (payload.project) {
+        setProject(payload.project);
+        setCreatedPanelOpen(true);
+      }
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-project-${Date.now()}`,
+          role: "assistant",
+          text: payload.reply,
+          files: payload.project?.files,
+        },
+      ]);
+    } catch (caught) {
+      setChatError(caught instanceof Error ? caught.message : "Erro inesperado.");
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-project-error-${Date.now()}`,
+          role: "assistant",
+          text: "Nao consegui criar o projeto agora. Revise o briefing e tente novamente.",
+        },
+      ]);
+    } finally {
+      setIsSending(false);
+    }
+  }
+
   function applyPrompt(prompt: string) {
     setInput(prompt);
   }
@@ -461,6 +545,14 @@ export function AiBuilderApp() {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                className="inline-flex h-9 items-center gap-2 rounded-md bg-[#7cff6b] px-3 text-xs font-black text-black transition hover:bg-[#d8ff76]"
+                onClick={() => setProjectBriefOpen(true)}
+                type="button"
+              >
+                <Sparkles className="h-4 w-4" aria-hidden="true" />
+                Criar projeto
+              </button>
               <button
                 className="inline-flex h-9 items-center gap-2 rounded-md border border-white/10 px-3 text-xs font-semibold text-zinc-300 transition hover:border-[#7cff6b]/50 hover:text-white"
                 onClick={clearProject}
@@ -633,6 +725,13 @@ export function AiBuilderApp() {
             setPreviewMode(nextAccount.settings.defaultPreview);
             setSettingsOpen(false);
           }}
+        />
+      )}
+
+      {account && projectBriefOpen && (
+        <CreateProjectModal
+          onClose={() => setProjectBriefOpen(false)}
+          onCreate={(brief) => void handleCreateProject(brief)}
         />
       )}
     </main>
@@ -1339,6 +1438,146 @@ function AccountDock(props: {
         <span className="max-w-40 truncate text-sm font-semibold text-white">{props.account.name}</span>
       </button>
     </div>
+  );
+}
+
+function CreateProjectModal(props: {
+  onClose: () => void;
+  onCreate: (brief: ProjectBrief) => void;
+}) {
+  const [companyName, setCompanyName] = useState("");
+  const [phoneWhatsapp, setPhoneWhatsapp] = useState("");
+  const [email, setEmail] = useState("");
+  const [niche, setNiche] = useState("Barbearia");
+  const [primaryColor, setPrimaryColor] = useState("#7cff6b");
+  const [error, setError] = useState<string | null>(null);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const cleanName = companyName.trim();
+    const cleanNiche = niche.trim();
+
+    if (cleanName.length < 2) {
+      setError("Digite o nome da empresa.");
+      return;
+    }
+
+    if (cleanNiche.length < 2) {
+      setError("Digite o nicho do projeto.");
+      return;
+    }
+
+    if (email.trim() && !email.includes("@")) {
+      setError("Digite um email valido ou deixe em branco.");
+      return;
+    }
+
+    props.onCreate({
+      companyName: cleanName,
+      phoneWhatsapp: phoneWhatsapp.trim() || undefined,
+      email: email.trim() || undefined,
+      niche: cleanNiche,
+      primaryColor,
+    });
+  }
+
+  return (
+    <ModalShell title="Criar projeto" onClose={props.onClose}>
+      <form className="grid gap-5" onSubmit={submit}>
+        <div className="rounded-xl border border-[#7cff6b]/25 bg-[#7cff6b]/10 p-4">
+          <p className="text-sm font-semibold text-white">Briefing antes do chat</p>
+          <p className="mt-1 text-sm leading-6 text-zinc-400">
+            A IA vai usar esses dados para gerar um site inicial mais realista, com imagem gratuita
+            do nicho, contato, cor principal e secoes basicas ja organizadas.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="grid gap-1.5 text-sm">
+            <span className="text-zinc-400">Nome da empresa</span>
+            <input
+              className="h-11 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
+              onChange={(event) => setCompanyName(event.target.value)}
+              placeholder="Ex.: Barbearia Elite"
+              value={companyName}
+            />
+          </label>
+
+          <label className="grid gap-1.5 text-sm">
+            <span className="text-zinc-400">Nicho</span>
+            <input
+              className="h-11 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
+              onChange={(event) => setNiche(event.target.value)}
+              placeholder="Barbearia, restaurante, academia..."
+              value={niche}
+            />
+          </label>
+
+          <label className="grid gap-1.5 text-sm">
+            <span className="text-zinc-400">Telefone / WhatsApp opcional</span>
+            <input
+              className="h-11 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
+              onChange={(event) => setPhoneWhatsapp(event.target.value)}
+              placeholder="Ex.: 5599999999999"
+              value={phoneWhatsapp}
+            />
+          </label>
+
+          <label className="grid gap-1.5 text-sm">
+            <span className="text-zinc-400">Email opcional</span>
+            <input
+              className="h-11 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="contato@empresa.com"
+              type="email"
+              value={email}
+            />
+          </label>
+        </div>
+
+        <label className="grid gap-1.5 text-sm">
+          <span className="text-zinc-400">Cor principal</span>
+          <div className="grid grid-cols-[56px_1fr] gap-3">
+            <input
+              aria-label="Selecionar cor principal"
+              className="h-11 w-14 rounded-lg border border-white/10 bg-black/40 p-1"
+              onChange={(event) => setPrimaryColor(event.target.value)}
+              type="color"
+              value={primaryColor}
+            />
+            <input
+              className="h-11 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
+              onChange={(event) => setPrimaryColor(event.target.value)}
+              placeholder="#7cff6b"
+              value={primaryColor}
+            />
+          </div>
+        </label>
+
+        {error && (
+          <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-100">
+            {error}
+          </div>
+        )}
+
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            className="h-11 rounded-lg border border-white/10 px-4 text-sm font-semibold text-zinc-300 transition hover:text-white"
+            onClick={props.onClose}
+            type="button"
+          >
+            Cancelar
+          </button>
+          <button
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#7cff6b] px-4 text-sm font-black text-black transition hover:bg-[#d8ff76]"
+            type="submit"
+          >
+            <Sparkles className="h-4 w-4" aria-hidden="true" />
+            Gerar site
+          </button>
+        </div>
+      </form>
+    </ModalShell>
   );
 }
 

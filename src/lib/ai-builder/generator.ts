@@ -5,6 +5,14 @@ export type BuilderFile = {
   content: string;
 };
 
+export type ProjectBrief = {
+  companyName: string;
+  phoneWhatsapp?: string;
+  email?: string;
+  niche: string;
+  primaryColor: string;
+};
+
 export type BuilderProject = {
   id: string;
   name: string;
@@ -13,6 +21,7 @@ export type BuilderProject = {
   prompt: string;
   industry: string;
   paletteName: string;
+  brief?: ProjectBrief;
   previewHtml: string;
   steps: string[];
   features: string[];
@@ -103,6 +112,7 @@ const defaultSuggestions = [
 export function respondToBuilderMessage(input: {
   message: string;
   project?: BuilderProject | null;
+  brief?: ProjectBrief | null;
 }): BuilderAssistantResponse {
   const message = input.message.trim();
 
@@ -112,6 +122,26 @@ export function respondToBuilderMessage(input: {
       reply: "Me diga o site, SaaS ou ajuste que voce quer criar.",
       suggestions: defaultSuggestions,
       tokenCost: 0,
+    };
+  }
+
+  if (input.brief) {
+    const project = buildProjectFromBrief(input.brief);
+
+    return {
+      mode: "create",
+      project,
+      reply: [
+        `Criei um projeto para ${project.name} usando o briefing inicial.`,
+        project.summary,
+        "Usei nicho, cor principal e contato para montar uma primeira versao mais parecida com um site real, com imagens gratuitas no preview.",
+      ].join("\n\n"),
+      suggestions: [
+        "Adicione depoimentos de clientes reais.",
+        "Crie uma secao de servicos com precos.",
+        "Troque a imagem principal por outra referencia.",
+      ],
+      tokenCost: estimateTokenCost(message, "create"),
     };
   }
 
@@ -163,6 +193,57 @@ export function respondToBuilderMessage(input: {
   };
 }
 
+export function buildProjectFromBrief(brief: ProjectBrief): BuilderProject {
+  const cleanBrief = normalizeBrief(brief);
+  const prompt = [
+    `Crie um site profissional para ${cleanBrief.companyName}.`,
+    `Nicho: ${cleanBrief.niche}.`,
+    `Cor principal: ${cleanBrief.primaryColor}.`,
+    cleanBrief.phoneWhatsapp ? `Telefone/WhatsApp: ${cleanBrief.phoneWhatsapp}.` : "",
+    cleanBrief.email ? `Email: ${cleanBrief.email}.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const now = new Date().toISOString();
+  const industry = detectIndustry(cleanBrief.niche);
+  const palette = buildPaletteFromColor(cleanBrief.primaryColor, prompt);
+  const features = buildFeatures(prompt, "site", industry);
+  const summary = `${cleanBrief.companyName} e um site profissional para ${industry}, com imagem real do nicho, CTA de contato, prova social, servicos e uma primeira estrutura pronta para publicar.`;
+
+  return {
+    id: createId(prompt),
+    name: titleCase(cleanBrief.companyName),
+    kind: "site",
+    summary,
+    prompt,
+    industry,
+    paletteName: palette.name,
+    brief: cleanBrief,
+    steps: [
+      "Briefing estruturado recebido.",
+      "Nicho, contato e cor principal aplicados.",
+      "Imagens gratuitas do nicho selecionadas para o preview.",
+      "Secoes de servicos, prova social e CTA montadas.",
+      "Arquivos sugeridos preparados para evoluir o projeto.",
+    ],
+    features,
+    files: buildFiles(cleanBrief.companyName, "site", features, prompt, cleanBrief),
+    previewHtml: buildPreviewHtml({
+      prompt,
+      name: titleCase(cleanBrief.companyName),
+      kind: "site",
+      industry,
+      features,
+      palette,
+      brief: cleanBrief,
+      editNotes: [],
+    }),
+    editCount: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 export function buildProjectFromPrompt(prompt: string): BuilderProject {
   const cleanPrompt = prompt.trim();
   const now = new Date().toISOString();
@@ -201,6 +282,7 @@ export function buildProjectFromPrompt(prompt: string): BuilderProject {
       industry,
       features,
       palette,
+      brief: undefined,
       editNotes: [],
     }),
     editCount: 0,
@@ -250,7 +332,7 @@ function editProjectFromPrompt(project: BuilderProject, prompt: string): Builder
     prompt: nextPrompt,
     paletteName: requestedPalette.name,
     features: nextFeatures,
-    files: buildFiles(name, kind, nextFeatures, nextPrompt),
+    files: buildFiles(name, kind, nextFeatures, nextPrompt, project.brief),
     previewHtml: buildPreviewHtml({
       prompt: nextPrompt,
       name,
@@ -258,6 +340,7 @@ function editProjectFromPrompt(project: BuilderProject, prompt: string): Builder
       industry: project.industry,
       features: nextFeatures,
       palette: requestedPalette,
+      brief: project.brief,
       editNotes: changes,
     }),
     editCount: project.editCount + 1,
@@ -398,6 +481,33 @@ function getPalette(name: string) {
   return palettes.find((palette) => palette.name === name) ?? palettes[0];
 }
 
+function buildPaletteFromColor(color: string, fallbackPrompt: string): Palette {
+  const cleanColor = normalizeColor(color);
+
+  if (!cleanColor) return pickPalette(fallbackPrompt);
+
+  return {
+    name: "custom",
+    background: "#070706",
+    surface: "#11110f",
+    surfaceAlt: "#1a1a16",
+    primary: cleanColor,
+    secondary: "#f6f1df",
+    text: "#fffdf5",
+    muted: "#c8c0ad",
+  };
+}
+
+function normalizeColor(color: string) {
+  const trimmed = color.trim();
+  if (/^#[0-9a-f]{6}$/i.test(trimmed)) return trimmed;
+  if (/^#[0-9a-f]{3}$/i.test(trimmed)) {
+    return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`;
+  }
+
+  return null;
+}
+
 function buildName(prompt: string, industry: string, kind: BuilderProject["kind"]) {
   const explicitName = prompt.match(
     /(?:chamado|chamada|nome|marca|titulo|título)\s+(?:de\s+)?["']?([A-Za-zÀ-ÿ0-9 ][A-Za-zÀ-ÿ0-9 ]{2,34})["']?/i,
@@ -470,6 +580,7 @@ function buildFiles(
   kind: BuilderProject["kind"],
   features: string[],
   prompt: string,
+  brief?: ProjectBrief,
 ): BuilderFile[] {
   const slug = slugify(name);
   const wantsAuth = features.some((feature) => normalize(feature).includes("autentic"));
@@ -498,6 +609,14 @@ function buildFiles(
           name,
           kind,
           summary: prompt,
+          contact: brief
+            ? {
+                phoneWhatsapp: brief.phoneWhatsapp,
+                email: brief.email,
+                niche: brief.niche,
+                primaryColor: brief.primaryColor,
+              }
+            : undefined,
           features,
         },
         null,
@@ -550,14 +669,18 @@ function buildPreviewHtml(input: {
   industry: string;
   features: string[];
   palette: Palette;
+  brief?: ProjectBrief;
   editNotes: string[];
 }) {
   const isDashboard = input.kind === "dashboard" || input.kind === "saas";
   const escapedName = escapeHtml(input.name);
+  const media = getNicheMedia(input.industry);
+  const profile = getNicheProfile(input.industry, input.name);
+  const contact = buildContact(input.brief);
   const description = escapeHtml(
     isDashboard
       ? `Sistema para ${input.industry} com clientes, automacoes, metricas e operacao em um so lugar.`
-      : `Site para ${input.industry} com presenca profissional, copy clara, prova social e foco em conversao.`,
+      : profile.description,
   );
   const promptSummary = escapeHtml(firstSentence(input.prompt || "Projeto gerado pela IA ZS."));
   const editNotes = input.editNotes
@@ -593,11 +716,12 @@ function buildPreviewHtml(input: {
         </div>
       </section>`
     : `
-      <section class="product site" aria-label="Preview do site">
-        <div class="mock-nav"><span></span><span></span><span></span></div>
-        <h2>Transforme visitantes em clientes</h2>
-        <p>Uma experiencia rapida, clara e pronta para publicar.</p>
-        <button type="button">Quero comecar</button>
+      <section class="product site media-card" aria-label="Preview do site">
+        <img src="${media.secondary}" alt="${escapeHtml(media.secondaryAlt)}" referrerpolicy="no-referrer" />
+        <div class="media-overlay">
+          <p>${escapeHtml(profile.kicker)}</p>
+          <h2>${escapeHtml(profile.cardTitle)}</h2>
+        </div>
       </section>`;
 
   return `<!doctype html>
@@ -613,8 +737,9 @@ function buildPreviewHtml(input: {
       min-height: 100vh;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background:
-        radial-gradient(circle at 20% 0%, color-mix(in srgb, ${input.palette.primary} 20%, transparent), transparent 34%),
-        linear-gradient(145deg, ${input.palette.background}, #020403 72%);
+        linear-gradient(90deg, rgba(0,0,0,.76), rgba(0,0,0,.52)),
+        url("${media.hero}") center/cover fixed,
+        ${input.palette.background};
       color: ${input.palette.text};
     }
     .page {
@@ -653,6 +778,15 @@ function buildPreviewHtml(input: {
       font-size: 13px;
       font-weight: 700;
     }
+    .nav-cta {
+      color: ${input.palette.background};
+      background: ${input.palette.primary};
+      border-radius: 999px;
+      padding: 9px 13px;
+      font-size: 12px;
+      font-weight: 900;
+      text-decoration: none;
+    }
     .hero {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(320px, .9fr);
@@ -665,6 +799,21 @@ function buildPreviewHtml(input: {
       font-size: clamp(42px, 8vw, 92px);
       line-height: .9;
       letter-spacing: -0.055em;
+    }
+    .proof {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .proof span {
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px;
+      background: rgba(0,0,0,.32);
+      padding: 9px 12px;
+      color: ${input.palette.text};
+      font-size: 12px;
+      font-weight: 800;
     }
     .lead {
       max-width: 620px;
@@ -708,6 +857,49 @@ function buildPreviewHtml(input: {
       box-shadow: 0 28px 100px rgba(0,0,0,.42);
       min-height: 420px;
     }
+    .media-card {
+      position: relative;
+      overflow: hidden;
+      padding: 0;
+      min-height: 560px;
+      isolation: isolate;
+    }
+    .media-card img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: saturate(1.05) contrast(1.04);
+      z-index: -2;
+    }
+    .media-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, transparent 18%, rgba(0,0,0,.76));
+      z-index: -1;
+    }
+    .media-overlay {
+      position: absolute;
+      inset-inline: 22px;
+      bottom: 22px;
+    }
+    .media-overlay p {
+      color: ${input.palette.primary};
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      margin: 0 0 10px;
+    }
+    .media-overlay h2 {
+      margin: 0;
+      max-width: 520px;
+      font-size: clamp(34px, 5vw, 58px);
+      line-height: .94;
+      letter-spacing: -0.05em;
+    }
     .toolbar, .metrics {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -740,38 +932,6 @@ function buildPreviewHtml(input: {
       margin: 0;
       gap: 12px;
     }
-    .site {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-    }
-    .mock-nav {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 54px;
-    }
-    .mock-nav span {
-      width: 64px;
-      height: 8px;
-      border-radius: 99px;
-      background: rgba(255,255,255,.16);
-    }
-    .site h2 {
-      font-size: clamp(34px, 6vw, 58px);
-      line-height: .95;
-      letter-spacing: -0.045em;
-      margin: 0 0 14px;
-    }
-    .site p {
-      color: ${input.palette.muted};
-      font-size: 18px;
-    }
-    .site button {
-      align-self: flex-start;
-      margin-top: 20px;
-      background: ${input.palette.primary};
-      color: ${input.palette.background};
-    }
     .features {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -802,6 +962,56 @@ function buildPreviewHtml(input: {
     .edit-log strong {
       color: ${input.palette.text};
     }
+    .story {
+      display: grid;
+      grid-template-columns: minmax(0, .85fr) minmax(0, 1fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+    .story img {
+      width: 100%;
+      min-height: 360px;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 22px;
+      border: 1px solid rgba(255,255,255,.1);
+    }
+    .story-panel {
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 22px;
+      padding: clamp(22px, 4vw, 38px);
+      background: rgba(0,0,0,.46);
+    }
+    .story-panel h2 {
+      margin: 0;
+      font-size: clamp(32px, 5vw, 62px);
+      line-height: .95;
+      letter-spacing: -0.05em;
+    }
+    .story-panel p {
+      color: ${input.palette.muted};
+      line-height: 1.7;
+      font-size: 16px;
+    }
+    .contact-card {
+      margin-top: 18px;
+      display: grid;
+      gap: 10px;
+    }
+    .contact-card a, .contact-card span {
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 14px;
+      padding: 13px 14px;
+      color: ${input.palette.text};
+      background: rgba(255,255,255,.05);
+      text-decoration: none;
+      font-weight: 800;
+    }
+    .credit {
+      color: ${input.palette.muted};
+      font-size: 11px;
+      margin-top: 12px;
+    }
     footer {
       color: ${input.palette.muted};
       font-size: 13px;
@@ -809,6 +1019,7 @@ function buildPreviewHtml(input: {
     @media (max-width: 860px) {
       .hero { grid-template-columns: 1fr; }
       .features { grid-template-columns: 1fr; }
+      .story { grid-template-columns: 1fr; }
       nav { display: none; }
       .toolbar, .metrics { grid-template-columns: 1fr; }
       .timeline p { flex-direction: column; }
@@ -819,15 +1030,19 @@ function buildPreviewHtml(input: {
   <main class="page">
     <header>
       <div class="brand">${escapedName}</div>
-      <nav><span>Produto</span><span>Recursos</span><span>Planos</span><span>Contato</span></nav>
+      <nav><span>Servicos</span><span>Resultados</span><span>Agenda</span></nav>
+      ${contact.primary ? `<a class="nav-cta" href="${contact.primaryHref}">${contact.primary}</a>` : ""}
     </header>
     <section class="hero">
       <div>
-        <h1>${isDashboard ? "Operacao pronta para escalar" : escapedName}</h1>
+        <h1>${isDashboard ? "Operacao pronta para escalar" : escapeHtml(profile.headline)}</h1>
         <p class="lead">${description}</p>
         <div class="actions">
-          <a class="primary">Comecar agora</a>
-          <a class="secondary">Ver estrutura</a>
+          <a class="primary" href="${contact.primaryHref}">${contact.primary || "Comecar agora"}</a>
+          <a class="secondary" href="#servicos">Ver servicos</a>
+        </div>
+        <div class="proof">
+          ${profile.proofPoints.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
         </div>
         ${
           editNotes
@@ -837,11 +1052,180 @@ function buildPreviewHtml(input: {
       </div>
       ${productSurface}
     </section>
-    <section class="features">${featureCards}</section>
+    <section id="servicos" class="features">${featureCards}</section>
+    <section class="story">
+      <img src="${media.tertiary}" alt="${escapeHtml(media.tertiaryAlt)}" referrerpolicy="no-referrer" />
+      <div class="story-panel">
+        <h2>${escapeHtml(profile.storyTitle)}</h2>
+        <p>${escapeHtml(profile.storyText)}</p>
+        <div class="contact-card">
+          ${contact.whatsapp ? `<a href="${contact.whatsappHref}">${escapeHtml(contact.whatsapp)}</a>` : ""}
+          ${contact.email ? `<a href="mailto:${escapeHtml(contact.email)}">${escapeHtml(contact.email)}</a>` : ""}
+          ${!contact.whatsapp && !contact.email ? `<span>Adicione telefone ou email para ativar CTAs reais.</span>` : ""}
+        </div>
+        <p class="credit">Imagens gratuitas via Unsplash. ${escapeHtml(media.credit)}</p>
+      </div>
+    </section>
     <footer><span>Gerado pela IA ZS</span><span>${promptSummary}</span></footer>
   </main>
 </body>
 </html>`;
+}
+
+function normalizeBrief(brief: ProjectBrief): ProjectBrief {
+  return {
+    companyName: brief.companyName.trim() || "Nova Empresa",
+    phoneWhatsapp: brief.phoneWhatsapp?.trim(),
+    email: brief.email?.trim(),
+    niche: brief.niche.trim() || "negocios digitais",
+    primaryColor: normalizeColor(brief.primaryColor) ?? "#7cff6b",
+  };
+}
+
+function buildContact(brief?: ProjectBrief) {
+  const phone = brief?.phoneWhatsapp?.trim();
+  const digits = phone?.replace(/\D/g, "") ?? "";
+  const hasWhatsapp = digits.length >= 10;
+  const whatsappHref = hasWhatsapp
+    ? `https://wa.me/${digits}`
+    : "#servicos";
+  const email = brief?.email?.trim();
+
+  return {
+    primary: hasWhatsapp ? "Agendar pelo WhatsApp" : email ? "Enviar email" : "Ver servicos",
+    primaryHref: hasWhatsapp ? whatsappHref : email ? `mailto:${email}` : "#servicos",
+    whatsapp: phone ? `WhatsApp: ${phone}` : "",
+    whatsappHref,
+    email: email ?? "",
+  };
+}
+
+function getNicheMedia(industry: string) {
+  const normalized = normalize(industry);
+  const images = {
+    barbearias: {
+      hero: "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?auto=format&fit=crop&w=1800&q=82",
+      secondary: "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=1200&q=82",
+      tertiary: "https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=1200&q=82",
+      secondaryAlt: "Cadeira e ferramentas de barbearia",
+      tertiaryAlt: "Atendimento em barbearia moderna",
+      credit: "Barber shop photos from Unsplash.",
+    },
+    restaurantes: {
+      hero: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1800&q=82",
+      secondary: "https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1200&q=82",
+      tertiary: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=82",
+      secondaryAlt: "Sala de restaurante com mesas preparadas",
+      tertiaryAlt: "Prato servido em restaurante",
+      credit: "Restaurant photos from Unsplash.",
+    },
+    academias: {
+      hero: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=1800&q=82",
+      secondary: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=82",
+      tertiary: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=82",
+      secondaryAlt: "Pessoa treinando em academia",
+      tertiaryAlt: "Equipamentos de musculacao",
+      credit: "Fitness photos from Unsplash.",
+    },
+    clinicas: {
+      hero: "https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&w=1800&q=82",
+      secondary: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=1200&q=82",
+      tertiary: "https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=1200&q=82",
+      secondaryAlt: "Atendimento medico em clinica",
+      tertiaryAlt: "Ambiente clinico organizado",
+      credit: "Clinic photos from Unsplash.",
+    },
+    "lojas online": {
+      hero: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1800&q=82",
+      secondary: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=1200&q=82",
+      tertiary: "https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?auto=format&fit=crop&w=1200&q=82",
+      secondaryAlt: "Produto em loja online",
+      tertiaryAlt: "Compra online em andamento",
+      credit: "Commerce photos from Unsplash.",
+    },
+    default: {
+      hero: "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1800&q=82",
+      secondary: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=82",
+      tertiary: "https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=1200&q=82",
+      secondaryAlt: "Equipe trabalhando em projeto digital",
+      tertiaryAlt: "Ambiente de trabalho moderno",
+      credit: "Business photos from Unsplash.",
+    },
+  } satisfies Record<string, {
+    hero: string;
+    secondary: string;
+    tertiary: string;
+    secondaryAlt: string;
+    tertiaryAlt: string;
+    credit: string;
+  }>;
+
+  if (normalized.includes("barbearia")) return images.barbearias;
+  if (normalized.includes("restaurante")) return images.restaurantes;
+  if (normalized.includes("academia")) return images.academias;
+  if (normalized.includes("clinica")) return images.clinicas;
+  if (normalized.includes("loja")) return images["lojas online"];
+
+  return images.default;
+}
+
+function getNicheProfile(industry: string, name: string) {
+  const normalized = normalize(industry);
+  const safeName = titleCase(name);
+
+  if (normalized.includes("barbearia")) {
+    return {
+      kicker: "barbearia premium",
+      headline: `${safeName}: corte, barba e agenda sem atrito`,
+      cardTitle: "Ambiente masculino, atendimento pontual e acabamento de respeito",
+      storyTitle: "Um site feito para lotar a agenda",
+      storyText:
+        "A estrutura prioriza fotos reais, servicos claros, prova social e chamada direta para WhatsApp. O cliente entende o estilo da barbearia antes mesmo de mandar mensagem.",
+      description:
+        "Apresente cortes, barba, horarios e diferenciais com visual premium, imagem forte e botao direto para agendamento.",
+      proofPoints: ["Agenda rapida", "Servicos claros", "Prova social", "WhatsApp em destaque"],
+    };
+  }
+
+  if (normalized.includes("restaurante")) {
+    return {
+      kicker: "restaurante",
+      headline: `${safeName}: reserve, conheca o cardapio e venha hoje`,
+      cardTitle: "Atmosfera, pratos e reserva em uma experiencia direta",
+      storyTitle: "Cardapio e reserva no mesmo fluxo",
+      storyText:
+        "O site mostra ambiente, pratos, horarios e contato sem esconder a acao principal: reservar mesa ou chamar no WhatsApp.",
+      description:
+        "Mostre pratos, ambiente e reservas com uma pagina visual, rapida e feita para converter visitantes em clientes.",
+      proofPoints: ["Reservas", "Cardapio visual", "Ambiente", "Contato facil"],
+    };
+  }
+
+  if (normalized.includes("academia")) {
+    return {
+      kicker: "fitness",
+      headline: `${safeName}: treino, planos e matricula em minutos`,
+      cardTitle: "Energia, resultado e matricula sem formulario pesado",
+      storyTitle: "Planos claros para novos alunos",
+      storyText:
+        "A pagina conecta imagens de treino, beneficios, horarios e CTA de matricula, ajudando o visitante a decidir rapido.",
+      description:
+        "Crie uma presenca forte para planos, aulas, horarios e captacao de alunos com visual esportivo.",
+      proofPoints: ["Planos", "Aulas", "Resultados", "Matricula rapida"],
+    };
+  }
+
+  return {
+    kicker: "site profissional",
+    headline: `${safeName}: presenca digital pronta para converter`,
+    cardTitle: "Imagem, mensagem e contato em uma pagina objetiva",
+    storyTitle: "Do primeiro clique ao contato",
+    storyText:
+      "A pagina combina imagem real, proposta de valor, servicos e chamada de contato para transformar visitantes em oportunidades.",
+    description:
+      "Site profissional com imagem real do nicho, secoes objetivas, prova social e chamada de contato clara.",
+    proofPoints: ["Imagem real", "Copy objetiva", "Servicos", "Contato facil"],
+  };
 }
 
 function buildFeatureText(feature: string) {
