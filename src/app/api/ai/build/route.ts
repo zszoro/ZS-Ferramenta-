@@ -16,5 +16,8 @@ export async function POST(request: Request) {
   return Response.json({
     ok: true,
     project,
+    mode: "create",
+    reply: project.summary,
+    tokenCost: 44,
   });
 }

@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ZS Builder | Chat com Preview",
+  title: "ZS Ferramenta | IA para Sites e SaaS",
   description:
-    "Chat de IA para gerar sites e SaaS automaticamente com preview ao vivo.",
+    "Chat de IA para gerar e editar sites, SaaS e sistemas com preview ao vivo.",
 };
 
 export default function RootLayout({

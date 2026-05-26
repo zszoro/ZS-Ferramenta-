@@ -1,22 +1,38 @@
-# Arquitetura - ZS Builder
+# Arquitetura - ZS Ferramenta
 
-## Fluxo
+## Fluxo principal
 
 ```mermaid
 flowchart LR
-  A["Prompt do zs"] --> B["POST /api/ai/build"]
-  B --> C["Gerador local"]
-  C --> D["Projeto gerado"]
-  D --> E["Chat"]
-  D --> F["Preview iframe"]
+  A["Landing + login local"] --> B["Onboarding"]
+  B --> C["Chat da IA"]
+  C --> D["POST /api/ai/chat"]
+  D --> E["Motor local"]
+  E --> F["Resposta"]
+  E --> G["Projeto gerado/editado"]
+  G --> H["Preview iframe sandbox"]
+  G --> I["Arquivos no chat"]
 ```
 
-## Peças principais
+## Pecas principais
 
-- `AiBuilderApp`: controla chat, prompts, preview, exportação e estado de geração.
-- `buildProjectFromPrompt`: interpreta o pedido e gera uma primeira versão de SaaS/site.
-- `POST /api/ai/build`: camada backend preparada para trocar o gerador local por modelo real.
+- `AiBuilderApp`: controla landing, auth local, onboarding, chat, preview, tokens, planos, configuracoes e conta.
+- `respondToBuilderMessage`: interpreta conversa normal, criacao de projeto e edicao do projeto atual.
+- `buildProjectFromPrompt`: gera a primeira versao do site/SaaS.
+- `POST /api/ai/chat`: contrato principal para chat, criacao e edicao.
+- `POST /api/ai/build`: rota preservada para compatibilidade com chamadas antigas.
+- `POST /api/billing/mercado-pago`: ponto preparado para criar preferencias reais do Mercado Pago.
 
-## Decisão atual
+## Estado atual
 
-O app usa um motor local determinístico para funcionar sem API key. Isso evita tela quebrada em deploy e mantém o preview útil imediatamente. Quando houver chave/modelo definido, a troca deve acontecer dentro de `src/app/api/ai/build/route.ts`, preservando o contrato de resposta.
+- Autenticacao, perfis salvos, tokens e configuracoes funcionam via `localStorage`.
+- Cada conta nova recebe 500 tokens e o reset semanal e calculado no cliente.
+- O preview continua isolado com `iframe sandbox`.
+- O motor de IA e local e deterministico para manter o deploy funcionando sem API key.
+
+## Para producao real
+
+- Persistir usuarios, projetos, tokens, planos e sessoes em Vercel Postgres, Neon ou Supabase.
+- Trocar senha local por auth segura no backend.
+- Criar preferencias reais do Mercado Pago usando `MERCADO_PAGO_ACCESS_TOKEN`.
+- Conectar um modelo real no Route Handler, mantendo segredos somente no backend.
