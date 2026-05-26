@@ -1,5 +1,5 @@
-import { ZSPlatform } from "@/components/zs-platform";
+import { AiBuilderApp } from "@/components/ai-builder-app";
 
 export default function Home() {
-  return <ZSPlatform />;
+  return <AiBuilderApp />;
 }
