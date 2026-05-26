@@ -787,15 +787,19 @@ export function ${component}() {
 
   return (
     <main
-      className="min-h-screen bg-[var(--site-bg)] text-[var(--site-text)]"
+      className="min-h-screen overflow-x-hidden bg-[var(--site-bg)] text-[var(--site-text)]"
       style={
         {
           "--site-bg": site.theme.background,
+          "--site-bg-soft": site.theme.backgroundSoft,
           "--site-card": site.theme.card,
           "--site-primary": site.theme.primary,
+          "--site-primary-dark": site.theme.primaryDark,
           "--site-secondary": site.theme.secondary,
           "--site-text": site.theme.text,
           "--site-muted": site.theme.muted,
+          "--site-border": site.theme.border,
+          "--site-shadow": site.theme.shadow,
         } as CSSProperties
       }
     >
@@ -812,7 +816,10 @@ export function ${component}() {
 }
 
 function buildGeneratedHeaderSource(slug: string) {
-  return `import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
+  return `"use client";
+
+import { useState } from "react";
+import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
 
 type HeaderProps = {
   site: GeneratedSiteConfig;
@@ -820,30 +827,71 @@ type HeaderProps = {
 };
 
 export function Header({ site, whatsappHref }: HeaderProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
+  const brandInitial = site.name.trim().charAt(0).toUpperCase() || "Z";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-black/10 bg-white/85 backdrop-blur-xl">
-      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-        <a className="text-base font-black tracking-tight text-zinc-950 sm:text-lg" href="#inicio">
-          {site.name}
+    <header className="fixed inset-x-0 top-0 z-40 border-b border-[var(--site-border)] bg-[var(--site-bg)]/90 backdrop-blur-xl">
+      <div className="mx-auto grid h-20 w-[min(1120px,calc(100vw-40px))] grid-cols-[auto_1fr_auto] items-center gap-4">
+        <a className="inline-flex min-w-0 items-center gap-3" href="#inicio" aria-label={site.name}>
+          <span className="grid size-11 shrink-0 place-items-center rounded-full bg-[var(--site-text)] font-serif text-xl font-black text-[var(--site-bg)] shadow-[var(--site-shadow)]">
+            {brandInitial}
+          </span>
+          <span className="grid min-w-0 leading-tight">
+            <strong className="truncate text-base font-black tracking-tight">{site.name}</strong>
+            <small className="truncate text-xs font-semibold text-[var(--site-muted)]">{site.brandTagline}</small>
+          </span>
         </a>
-        <nav className="hidden items-center gap-5 text-sm font-semibold text-zinc-700 lg:flex">
+
+        <nav className="hidden justify-self-center rounded-full border border-[var(--site-border)] bg-white/45 p-1 lg:flex" aria-label="Menu principal">
           {site.navigation.map((item) => (
-            <a className="transition hover:text-zinc-950" href={item.href} key={item.href}>
+            <a className="rounded-full px-3 py-2 text-sm font-bold text-[var(--site-muted)] transition hover:bg-[var(--site-primary)]/15 hover:text-[var(--site-text)]" href={item.href} key={item.href}>
               {item.label}
             </a>
           ))}
         </nav>
-        <a
-          className="rounded-full bg-[var(--site-primary)] px-4 py-2 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
-          href={whatsappHref}
-          rel={isExternalWhatsapp ? "noreferrer" : undefined}
-          target={isExternalWhatsapp ? "_blank" : undefined}
-        >
-          Fazer pedido
-        </a>
+
+        <div className="flex items-center justify-end gap-2">
+          <a
+            className="hidden min-h-11 items-center justify-center rounded-full bg-gradient-to-br from-[var(--site-primary)] to-[var(--site-primary-dark)] px-5 text-sm font-black text-white shadow-[var(--site-shadow)] transition hover:-translate-y-0.5 sm:inline-flex"
+            href={whatsappHref}
+            rel={isExternalWhatsapp ? "noreferrer" : undefined}
+            target={isExternalWhatsapp ? "_blank" : undefined}
+          >
+            {site.headerCta}
+          </a>
+          <button
+            aria-expanded={isOpen}
+            aria-label={isOpen ? "Fechar menu" : "Abrir menu"}
+            className="inline-flex size-11 flex-col items-center justify-center gap-1.5 rounded-full border border-[var(--site-border)] bg-white text-[var(--site-text)] lg:hidden"
+            onClick={() => setIsOpen((current) => !current)}
+            type="button"
+          >
+            <span className={\`h-0.5 w-5 rounded-full bg-current transition \${isOpen ? "translate-y-2 rotate-45" : ""}\`} />
+            <span className={\`h-0.5 w-5 rounded-full bg-current transition \${isOpen ? "opacity-0" : ""}\`} />
+            <span className={\`h-0.5 w-5 rounded-full bg-current transition \${isOpen ? "-translate-y-2 -rotate-45" : ""}\`} />
+          </button>
+        </div>
       </div>
+      {isOpen ? (
+        <nav className="mx-auto mb-4 grid w-[min(1120px,calc(100vw-40px))] gap-2 rounded-3xl border border-[var(--site-border)] bg-white p-3 shadow-[var(--site-shadow)] lg:hidden" aria-label="Menu mobile">
+          {site.navigation.map((item) => (
+            <a className="rounded-2xl px-4 py-3 text-sm font-black text-[var(--site-muted)] hover:bg-[var(--site-bg-soft)]" href={item.href} key={item.href} onClick={() => setIsOpen(false)}>
+              {item.label}
+            </a>
+          ))}
+          <a
+            className="rounded-2xl bg-[var(--site-primary)] px-4 py-3 text-center text-sm font-black text-white"
+            href={whatsappHref}
+            onClick={() => setIsOpen(false)}
+            rel={isExternalWhatsapp ? "noreferrer" : undefined}
+            target={isExternalWhatsapp ? "_blank" : undefined}
+          >
+            {site.headerCta}
+          </a>
+        </nav>
+      ) : null}
     </header>
   );
 }
@@ -862,20 +910,20 @@ export function Hero({ site, whatsappHref }: HeroProps) {
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
 
   return (
-    <section className="mx-auto grid w-full max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:px-8" id="inicio">
-      <div>
+    <section className="mx-auto grid min-h-screen w-[min(1120px,calc(100vw-40px))] items-center gap-12 pt-32 pb-20 lg:grid-cols-[0.95fr_1.05fr]" id="inicio">
+      <div className="max-w-2xl">
         <p className="text-sm font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">
           {site.hero.eyebrow}
         </p>
-        <h1 className="mt-4 max-w-3xl text-4xl font-black leading-tight tracking-tight text-zinc-950 sm:text-6xl">
+        <h1 className="mt-4 font-serif text-[clamp(3rem,8vw,5.7rem)] font-black leading-[0.94] tracking-tight text-[var(--site-text)]">
           {site.hero.title}
         </h1>
-        <p className="mt-5 max-w-2xl text-lg leading-8 text-[var(--site-muted)]">
+        <p className="mt-6 max-w-xl text-lg leading-8 text-[var(--site-muted)]">
           {site.hero.subtitle}
         </p>
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+        <div className="mt-9 flex flex-col gap-3 sm:flex-row">
           <a
-            className="inline-flex items-center justify-center rounded-full bg-[var(--site-primary)] px-6 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+            className="inline-flex min-h-12 items-center justify-center rounded-full bg-gradient-to-br from-[var(--site-primary)] to-[var(--site-primary-dark)] px-7 text-sm font-black text-white shadow-[var(--site-shadow)] transition hover:-translate-y-0.5"
             href={whatsappHref}
             rel={isExternalWhatsapp ? "noreferrer" : undefined}
             target={isExternalWhatsapp ? "_blank" : undefined}
@@ -883,22 +931,22 @@ export function Hero({ site, whatsappHref }: HeroProps) {
             {site.hero.primaryCta}
           </a>
           <a
-            className="inline-flex items-center justify-center rounded-full border border-zinc-300 bg-white px-6 py-3 text-sm font-black text-zinc-950 transition hover:border-zinc-950"
+            className="inline-flex min-h-12 items-center justify-center rounded-full border border-[var(--site-border)] bg-white/70 px-7 text-sm font-black text-[var(--site-text)] transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[var(--site-shadow)]"
             href="#produtos"
           >
             {site.hero.secondaryCta}
           </a>
         </div>
       </div>
-      <div className="relative overflow-hidden rounded-[2rem] bg-zinc-200 shadow-2xl shadow-black/10">
+      <div className="relative overflow-hidden rounded-[2rem] bg-[var(--site-bg-soft)] shadow-[var(--site-shadow)]">
         <img
           alt={site.images.heroAlt}
-          className="h-[360px] w-full object-cover sm:h-[500px]"
+          className="h-[380px] w-full object-cover sm:h-[560px]"
           src={site.images.hero}
         />
-        <div className="absolute bottom-4 left-4 right-4 rounded-2xl bg-white/90 p-4 shadow-lg backdrop-blur">
-          <p className="text-sm font-black text-zinc-950">{site.hero.cardTitle}</p>
-          <p className="mt-1 text-sm text-zinc-600">{site.hero.cardText}</p>
+        <div className="absolute right-5 bottom-5 left-5 rounded-[1.25rem] border border-white/60 bg-white/88 p-4 shadow-[var(--site-shadow)] backdrop-blur">
+          <p className="text-sm font-black text-[var(--site-text)]">{site.hero.cardTitle}</p>
+          <p className="mt-1 text-sm text-[var(--site-muted)]">{site.hero.cardText}</p>
         </div>
       </div>
     </section>
@@ -908,7 +956,10 @@ export function Hero({ site, whatsappHref }: HeroProps) {
 }
 
 function buildGeneratedFeaturesSource(slug: string) {
-  return `import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
+  return `"use client";
+
+import { useMemo, useState } from "react";
+import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
 
 type FeaturesProps = {
   site: GeneratedSiteConfig;
@@ -916,91 +967,125 @@ type FeaturesProps = {
 };
 
 export function Features({ site, whatsappHref }: FeaturesProps) {
+  const [selectedCategory, setSelectedCategory] = useState("Todos");
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
+  const categories = ["Todos", ...site.categories];
+  const visibleProducts = useMemo(
+    () =>
+      selectedCategory === "Todos"
+        ? site.products
+        : site.products.filter((product) => product.category === selectedCategory),
+    [selectedCategory, site.products],
+  );
 
   return (
     <>
-      <section className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8" id="sobre">
-        <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
+      <section className="mx-auto w-[min(1120px,calc(100vw-40px))] scroll-mt-28 py-16" id="sobre">
+        <div className="grid gap-10 lg:grid-cols-[0.82fr_1.18fr]">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">Sobre</p>
-            <h2 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-5xl">
+            <span className="block h-1 w-16 rounded-full bg-gradient-to-r from-[var(--site-primary)] to-[var(--site-primary-dark)]" />
+            <h2 className="mt-5 font-serif text-4xl font-black leading-tight tracking-tight text-[var(--site-text)] sm:text-5xl">
               {site.about.title}
             </h2>
-            <p className="mt-4 text-base leading-8 text-[var(--site-muted)]">{site.about.text}</p>
+            <p className="mt-5 text-base leading-8 text-[var(--site-muted)]">{site.about.text}</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {site.differentials.map((item) => (
-              <article className="rounded-2xl bg-[var(--site-card)] p-5 shadow-sm ring-1 ring-black/5" key={item.title}>
-                <h3 className="text-lg font-black text-zinc-950">{item.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-[var(--site-muted)]">{item.text}</p>
+              <article className="rounded-[1.4rem] border border-[var(--site-border)] bg-white/75 p-6 shadow-[var(--site-shadow)]" key={item.title}>
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">{item.code}</span>
+                <h3 className="mt-3 text-xl font-black text-[var(--site-text)]">{item.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-[var(--site-muted)]">{item.text}</p>
               </article>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8" id="produtos">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">Produtos</p>
-            <h2 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-5xl">
+      <section className="mx-auto w-[min(1120px,calc(100vw-40px))] scroll-mt-28 py-16" id="produtos">
+        <div className="mx-auto max-w-3xl text-center">
+          <span className="mx-auto block h-1 w-16 rounded-full bg-gradient-to-r from-[var(--site-primary)] to-[var(--site-primary-dark)]" />
+          <h2 className="mt-5 font-serif text-4xl font-black leading-tight tracking-tight text-[var(--site-text)] sm:text-5xl">
               {site.productsTitle}
-            </h2>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {site.categories.map((category) => (
-              <span className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-black text-zinc-700" key={category}>
+          </h2>
+          <p className="mt-4 text-base leading-8 text-[var(--site-muted)]">{site.productsIntro}</p>
+        </div>
+
+        <div className="mt-10 rounded-[1.4rem] border border-[var(--site-border)] bg-white/62 p-4 shadow-[var(--site-shadow)]">
+          <div className="flex flex-wrap justify-center gap-2" aria-label="Categorias">
+            {categories.map((category) => (
+              <button
+                aria-pressed={selectedCategory === category}
+                className={
+                  "rounded-full px-4 py-2 text-sm font-black transition " +
+                  (selectedCategory === category
+                    ? "bg-[var(--site-text)] text-[var(--site-bg)]"
+                    : "bg-[var(--site-bg-soft)] text-[var(--site-muted)] hover:text-[var(--site-text)]")
+                }
+                key={category}
+                onClick={() => setSelectedCategory(category)}
+                type="button"
+              >
                 {category}
-              </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleProducts.map((product) => (
+              <article className="overflow-hidden rounded-[1.2rem] border border-[var(--site-border)] bg-white shadow-sm" key={product.name}>
+                <img alt={product.imageAlt} className="h-48 w-full object-cover" src={product.image} />
+                <div className="p-5">
+                  <span className="text-xs font-black uppercase tracking-[0.16em] text-[var(--site-primary)]">{product.category}</span>
+                  <div className="mt-3 flex items-start justify-between gap-3">
+                    <h3 className="text-lg font-black text-[var(--site-text)]">{product.name}</h3>
+                    <strong className="shrink-0 text-sm font-black text-[var(--site-primary-dark)]">{product.price}</strong>
+                  </div>
+                  <p className="mt-3 text-sm leading-7 text-[var(--site-muted)]">{product.description}</p>
+                </div>
+              </article>
             ))}
           </div>
         </div>
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {site.products.map((product) => (
-            <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5" key={product.name}>
-              <img alt={product.imageAlt} className="h-48 w-full object-cover" src={product.image} />
-              <div className="p-5">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--site-primary)]">{product.category}</p>
-                <h3 className="mt-2 text-xl font-black text-zinc-950">{product.name}</h3>
-                <p className="mt-2 text-sm leading-6 text-[var(--site-muted)]">{product.description}</p>
-                <p className="mt-4 text-lg font-black text-zinc-950">{product.price}</p>
-              </div>
-            </article>
-          ))}
-        </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8" id="cardapio">
-        <div className="grid overflow-hidden rounded-[2rem] bg-[var(--site-secondary)] text-white lg:grid-cols-[1fr_0.8fr]">
-          <div className="p-8 sm:p-12">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-white/70">Destaque</p>
-            <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">{site.promo.title}</h2>
-            <p className="mt-4 max-w-2xl text-base leading-8 text-white/80">{site.promo.text}</p>
+      <section className="mx-auto grid w-[min(1120px,calc(100vw-40px))] scroll-mt-28 items-center gap-8 py-16 lg:grid-cols-[1fr_0.82fr]" id="cardapio">
+        <div className="rounded-[2rem] bg-[var(--site-secondary)] p-8 text-white shadow-[var(--site-shadow)] sm:p-12">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-white/70">{site.promo.eyebrow}</p>
+            <h2 className="mt-4 font-serif text-4xl font-black leading-tight tracking-tight sm:text-5xl">{site.promo.title}</h2>
+            <p className="mt-5 max-w-2xl text-base leading-8 text-white/80">{site.promo.text}</p>
+            <div className="mt-6 grid gap-1">
+              <span className="text-xs font-bold uppercase tracking-[0.18em] text-white/60">{site.promo.metaLabel}</span>
+              <strong className="text-3xl font-black">{site.promo.price}</strong>
+            </div>
             <a
-              className="mt-8 inline-flex rounded-full bg-white px-6 py-3 text-sm font-black text-zinc-950 transition hover:-translate-y-0.5"
+              className="mt-8 inline-flex min-h-12 items-center rounded-full bg-white px-7 text-sm font-black text-[var(--site-text)] transition hover:-translate-y-0.5"
               href={whatsappHref}
               rel={isExternalWhatsapp ? "noreferrer" : undefined}
               target={isExternalWhatsapp ? "_blank" : undefined}
             >
               {site.promo.cta}
             </a>
-          </div>
-          <img alt={site.images.promoAlt} className="h-full min-h-[320px] w-full object-cover" src={site.images.promo} />
+        </div>
+        <div className="overflow-hidden rounded-[2rem] shadow-[var(--site-shadow)]">
+          <img alt={site.images.promoAlt} className="h-[360px] w-full object-cover lg:h-[440px]" src={site.images.promo} />
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8" id="depoimentos">
-        <p className="text-sm font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">Depoimentos</p>
-        <h2 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-5xl">
-          Clientes satisfeitos
-        </h2>
+      <section className="mx-auto w-[min(1120px,calc(100vw-40px))] scroll-mt-28 py-16" id="depoimentos">
+        <div className="max-w-2xl">
+          <span className="block h-1 w-16 rounded-full bg-gradient-to-r from-[var(--site-primary)] to-[var(--site-primary-dark)]" />
+          <h2 className="mt-5 font-serif text-4xl font-black leading-tight tracking-tight text-[var(--site-text)] sm:text-5xl">
+            {site.testimonialsTitle}
+          </h2>
+          <p className="mt-4 text-base leading-8 text-[var(--site-muted)]">{site.testimonialsIntro}</p>
+        </div>
         <div className="mt-8 grid gap-5 md:grid-cols-3">
           {site.testimonials.map((testimonial) => (
-            <article className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5" key={testimonial.name}>
+            <article className="rounded-[1.4rem] border border-[var(--site-border)] bg-white/78 p-6 shadow-[var(--site-shadow)]" key={testimonial.name}>
               <p className="text-sm font-black text-[var(--site-primary)]">{testimonial.rating}</p>
               <p className="mt-4 text-sm leading-7 text-[var(--site-muted)]">“{testimonial.comment}”</p>
-              <h3 className="mt-5 font-black text-zinc-950">{testimonial.name}</h3>
+              <h3 className="mt-5 font-black text-[var(--site-text)]">{testimonial.name}</h3>
+              <span className="mt-1 block text-xs font-bold uppercase tracking-[0.14em] text-[var(--site-muted)]">{testimonial.role}</span>
             </article>
           ))}
         </div>
@@ -1023,35 +1108,46 @@ export function ContactSection({ site, whatsappHref }: ContactSectionProps) {
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 lg:px-8" id="contato">
-      <div className="grid gap-8 rounded-[2rem] bg-white p-6 shadow-sm ring-1 ring-black/5 sm:p-8 lg:grid-cols-[0.9fr_1.1fr]">
-        <div>
-          <p className="text-sm font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">Contato</p>
-          <h2 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-5xl">
-            Peça pelo WhatsApp ou visite a loja
+    <section className="mx-auto grid w-[min(1120px,calc(100vw-40px))] scroll-mt-28 gap-8 py-16 lg:grid-cols-[0.95fr_1.05fr]" id="contato">
+      <div>
+        <span className="block h-1 w-16 rounded-full bg-gradient-to-r from-[var(--site-primary)] to-[var(--site-primary-dark)]" />
+        <h2 className="mt-5 font-serif text-4xl font-black leading-tight tracking-tight text-[var(--site-text)] sm:text-5xl">
+            {site.contactTitle}
           </h2>
-          <div className="mt-6 grid gap-3 text-sm text-zinc-700">
-            <p><strong>WhatsApp:</strong> {site.contact.whatsapp}</p>
-            <p><strong>E-mail:</strong> {site.contact.email}</p>
-            <p><strong>Endereço:</strong> {site.contact.address}</p>
-            <p><strong>Horário:</strong> {site.contact.hours}</p>
-          </div>
-          <a
-            className="mt-8 inline-flex rounded-full bg-[var(--site-primary)] px-6 py-3 text-sm font-black text-white transition hover:-translate-y-0.5"
-            href={whatsappHref}
-            rel={isExternalWhatsapp ? "noreferrer" : undefined}
-            target={isExternalWhatsapp ? "_blank" : undefined}
-          >
-            Chamar no WhatsApp
-          </a>
+        <p className="mt-5 max-w-xl text-base leading-8 text-[var(--site-muted)]">{site.contactIntro}</p>
+
+        <div className="mt-7 grid gap-3">
+          <article className="rounded-[1.2rem] border border-[var(--site-border)] bg-white/76 p-5">
+            <strong className="block text-sm font-black text-[var(--site-text)]">Endereço</strong>
+            <span className="mt-1 block text-sm text-[var(--site-muted)]">{site.contact.address}</span>
+          </article>
+          <article className="rounded-[1.2rem] border border-[var(--site-border)] bg-white/76 p-5">
+            <strong className="block text-sm font-black text-[var(--site-text)]">Horário</strong>
+            <span className="mt-1 block text-sm text-[var(--site-muted)]">{site.contact.hours}</span>
+          </article>
+          <article className="rounded-[1.2rem] border border-[var(--site-border)] bg-white/76 p-5">
+            <strong className="block text-sm font-black text-[var(--site-text)]">Telefone / WhatsApp</strong>
+            <span className="mt-1 block text-sm text-[var(--site-muted)]">{site.contact.whatsapp}</span>
+          </article>
         </div>
-        <div className="grid min-h-[320px] place-items-center overflow-hidden rounded-2xl bg-zinc-100 text-center">
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-zinc-500">Mapa</p>
-            <p className="mt-2 max-w-sm text-sm leading-6 text-zinc-600">
-              Espaço pronto para incorporar Google Maps ou outro mapa do endereço.
-            </p>
-          </div>
+
+        <a
+          className="mt-8 inline-flex min-h-12 items-center rounded-full bg-gradient-to-br from-[var(--site-primary)] to-[var(--site-primary-dark)] px-7 text-sm font-black text-white shadow-[var(--site-shadow)] transition hover:-translate-y-0.5"
+          href={whatsappHref}
+          rel={isExternalWhatsapp ? "noreferrer" : undefined}
+          target={isExternalWhatsapp ? "_blank" : undefined}
+        >
+          Chamar no WhatsApp
+        </a>
+      </div>
+
+      <div className="grid min-h-[360px] place-items-center rounded-[2rem] border border-[var(--site-border)] bg-[var(--site-bg-soft)] p-8 text-center shadow-[var(--site-shadow)]">
+        <div>
+          <div className="mx-auto mb-5 size-16 rounded-full border-[18px] border-[var(--site-primary)] bg-white shadow-[var(--site-shadow)]" />
+          <strong className="text-xl font-black text-[var(--site-text)]">Mapa da loja</strong>
+          <p className="mt-3 max-w-sm text-sm leading-7 text-[var(--site-muted)]">
+            Espaço reservado para incorporar Google Maps ou outro mapa do endereço.
+          </p>
         </div>
       </div>
     </section>
@@ -1065,11 +1161,11 @@ function buildGeneratedFooterSource(slug: string) {
 
 export function Footer({ site }: { site: GeneratedSiteConfig }) {
   return (
-    <footer className="border-t border-black/10 bg-zinc-950 px-4 py-10 text-white sm:px-6 lg:px-8">
+    <footer className="border-t border-[var(--site-border)] bg-[var(--site-text)] px-4 py-10 text-[var(--site-bg)] sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col justify-between gap-8 md:flex-row md:items-center">
         <div>
           <p className="text-xl font-black">{site.name}</p>
-          <p className="mt-2 text-sm text-white/60">{site.footerText}</p>
+          <p className="mt-2 text-sm text-white/60">{site.brandTagline}</p>
         </div>
         <div className="flex flex-wrap gap-4 text-sm font-semibold text-white/70">
           {site.navigation.map((item) => (
@@ -1086,6 +1182,7 @@ export function Footer({ site }: { site: GeneratedSiteConfig }) {
           ))}
         </div>
       </div>
+      <p className="mx-auto mt-8 w-full max-w-7xl text-sm text-white/55">{site.footerText}</p>
     </footer>
   );
 }
@@ -1180,15 +1277,22 @@ function buildGeneratedConfigSource(
   name: string;
   kind: "saas" | "site" | "landing" | "dashboard";
   niche: string;
+  templateSource: string;
+  brandTagline: string;
+  headerCta: string;
   whatsappMessage: string;
   footerText: string;
   theme: {
     background: string;
+    backgroundSoft: string;
     card: string;
     primary: string;
+    primaryDark: string;
     secondary: string;
     text: string;
     muted: string;
+    border: string;
+    shadow: string;
   };
   navigation: Array<{ label: string; href: string }>;
   hero: {
@@ -1210,9 +1314,10 @@ function buildGeneratedConfigSource(
     promo: string;
     promoAlt: string;
   };
-  differentials: Array<{ title: string; text: string }>;
+  differentials: Array<{ code: string; title: string; text: string }>;
   categories: string[];
   productsTitle: string;
+  productsIntro: string;
   products: Array<{
     category: string;
     name: string;
@@ -1222,11 +1327,18 @@ function buildGeneratedConfigSource(
     imageAlt: string;
   }>;
   promo: {
+    eyebrow: string;
     title: string;
     text: string;
+    metaLabel: string;
+    price: string;
     cta: string;
   };
-  testimonials: Array<{ name: string; rating: string; comment: string }>;
+  testimonialsTitle: string;
+  testimonialsIntro: string;
+  testimonials: Array<{ name: string; role: string; rating: string; comment: string }>;
+  contactTitle: string;
+  contactIntro: string;
   contact: {
     whatsapp: string;
     email: string;
@@ -1247,7 +1359,7 @@ function buildGeneratedConfig(
   prompt: string,
   brief?: ProjectBrief,
 ) {
-  const industry = detectIndustry(`${brief?.niche ?? ""} ${prompt}`);
+  const industry = detectIndustry(brief?.niche?.trim() || latestPromptIntent(prompt));
   const isBakery = normalize(industry).includes("padaria");
   const media = getNicheMedia(industry);
   const palette = brief?.primaryColor ? buildPaletteFromColor(brief.primaryColor, prompt) : pickPalette(prompt);
@@ -1255,133 +1367,516 @@ function buildGeneratedConfig(
   const phone = brief?.phoneWhatsapp?.trim() || "5511999990000";
   const email = brief?.email?.trim() || "contato@exemplo.com";
   const nicheLabel = brief?.niche?.trim() || industry;
-  const differentials = isBakery
-    ? [
-        {
-          title: "Pães frescos",
-          text: "Fornadas ao longo do dia para entregar aroma, crocância e sabor de padaria de verdade.",
-        },
-        {
-          title: "Produção artesanal",
-          text: "Receitas preparadas com cuidado, fermentação correta e ingredientes selecionados.",
-        },
-        {
-          title: "Entrega rápida",
-          text: "Contato direto pelo WhatsApp para combinar retirada, entrega e pedidos especiais.",
-        },
-        {
-          title: "Qualidade garantida",
-          text: "Produtos organizados por categoria, com preço claro e padrão visual consistente.",
-        },
-      ]
-    : unique(features.slice(0, 4)).map((feature) => ({
-        title: feature,
-        text: buildFeatureText(feature),
-      }));
-
-  while (differentials.length < 4) {
-    differentials.push({
-      title: ["Atendimento rápido", "Visual profissional", "Conteúdo editável", "Contato direto"][differentials.length],
-      text: "Bloco reutilizável para manter o site claro, responsivo e pronto para evoluir.",
-    });
-  }
+  const copy = buildTemplateCopy(industry, siteName, nicheLabel, features);
+  const theme = buildTemplateTheme(industry, palette, brief?.primaryColor);
+  const differentials = copy.differentials.slice(0, 4).map((item, index) => ({
+    code: String(index + 1).padStart(2, "0"),
+    ...item,
+  }));
 
   return {
     name: siteName,
     kind,
     niche: nicheLabel,
-    whatsappMessage: `Olá, vim pelo site da ${siteName} e quero fazer um pedido.`,
+    templateSource: "zszoro/Site.git",
+    brandTagline: copy.brandTagline,
+    headerCta: copy.headerCta,
+    whatsappMessage: copy.whatsappMessage,
     footerText: `© ${new Date().getFullYear()} ${siteName}. Todos os direitos reservados.`,
-    theme: {
-      background: isBakery ? "#fff7ed" : palette.background,
-      card: isBakery ? "#ffffff" : palette.surface,
-      primary: palette.primary,
-      secondary: isBakery ? "#7c3f18" : palette.secondary,
-      text: isBakery ? "#28180d" : palette.text,
-      muted: isBakery ? "#765b43" : palette.muted,
-    },
+    theme,
     navigation: [
       { label: "Início", href: "#inicio" },
       { label: "Sobre", href: "#sobre" },
-      { label: "Produtos", href: "#produtos" },
-      { label: "Cardápio", href: "#cardapio" },
+      { label: copy.productsNavLabel, href: "#produtos" },
+      { label: copy.menuNavLabel, href: "#cardapio" },
       { label: "Depoimentos", href: "#depoimentos" },
       { label: "Contato", href: "#contato" },
     ],
-    hero: {
-      eyebrow: isBakery ? "Padaria artesanal" : "Site profissional",
-      title: isBakery
-        ? `${siteName}: pães frescos e produção artesanal todos os dias`
-        : `${siteName}: presença digital pronta para converter`,
-      subtitle: isBakery
-        ? "Monte pedidos pelo WhatsApp, veja produtos com preço e conheça os diferenciais da padaria em uma página moderna e responsiva."
-        : "Site responsivo com proposta clara, imagens do nicho, prova social e contato direto para transformar visitas em oportunidades.",
-      primaryCta: isBakery ? "Pedir pelo WhatsApp" : "Chamar no WhatsApp",
-      secondaryCta: isBakery ? "Ver produtos" : "Ver serviços",
-      cardTitle: isBakery ? "Forno aberto cedo" : "Primeira versão editável",
-      cardText: isBakery
-        ? "Pães, bolos, doces, salgados e bebidas organizados para pedido rápido."
-        : "Textos, cores, contato e imagens podem ser ajustados no editor simples.",
-    },
-    about: {
-      title: isBakery ? "Tradição, frescor e atendimento próximo" : "Uma estrutura clara para vender melhor",
-      text: isBakery
-        ? `${siteName} combina produção artesanal, ingredientes selecionados e atendimento direto para quem quer comprar pães, bolos, doces e salgados sem complicação.`
-        : `${siteName} apresenta a empresa com uma experiência objetiva, responsiva e preparada para crescer com novas páginas, APIs e integrações.`,
-    },
+    hero: copy.hero,
+    about: copy.about,
     images: {
       hero: media.hero,
-      heroAlt: isBakery ? "Pães artesanais frescos em uma padaria" : media.secondaryAlt,
+      heroAlt: copy.heroImageAlt || (isBakery ? "Pães artesanais frescos em uma padaria" : media.secondaryAlt),
       promo: media.secondary,
-      promoAlt: isBakery ? "Mesa com produtos de padaria e café" : media.tertiaryAlt,
+      promoAlt: copy.promoImageAlt || (isBakery ? "Mesa com produtos de padaria e café" : media.tertiaryAlt),
     },
     differentials,
-    categories: isBakery
-      ? ["Pães", "Bolos", "Doces", "Salgados", "Bebidas"]
-      : ["Serviços", "Planos", "Resultados", "Contato"],
-    productsTitle: isBakery ? "Produtos mais pedidos" : "Serviços em destaque",
-    products: isBakery ? buildBakeryGeneratedProducts(media) : buildGenericGeneratedProducts(industry, media),
-    promo: {
-      title: isBakery ? "Combo do café da manhã" : "Oferta principal pronta para conversão",
-      text: isBakery
-        ? "Um combo com pão francês, pão de queijo, bolo caseiro, doce do dia e café para pedir em poucos cliques."
-        : "Bloco promocional para destacar o serviço mais importante e levar o visitante direto ao contato.",
-      cta: isBakery ? "Pedir combo no WhatsApp" : "Conversar agora",
-    },
-    testimonials: [
-      {
-        name: "Marina Costa",
-        rating: "★★★★★",
-        comment: isBakery
-          ? "Os pães chegam quentinhos e o atendimento pelo WhatsApp é muito rápido."
-          : "A página ficou clara, bonita e facilitou o contato dos clientes.",
-      },
-      {
-        name: "Rafael Lima",
-        rating: "★★★★★",
-        comment: isBakery
-          ? "O combo do café da manhã virou pedido fixo aqui em casa."
-          : "A estrutura ficou profissional e simples de atualizar.",
-      },
-      {
-        name: "Camila Rocha",
-        rating: "★★★★★",
-        comment: isBakery
-          ? "Gostei de ver produtos, preços e contato no mesmo lugar."
-          : "O site passa confiança logo na primeira tela.",
-      },
-    ],
+    categories: copy.categories,
+    productsTitle: copy.productsTitle,
+    productsIntro: copy.productsIntro,
+    products: isBakery ? buildBakeryGeneratedProducts(media) : buildIndustryGeneratedProducts(industry, media),
+    promo: copy.promo,
+    testimonialsTitle: copy.testimonialsTitle,
+    testimonialsIntro: copy.testimonialsIntro,
+    testimonials: copy.testimonials,
+    contactTitle: copy.contactTitle,
+    contactIntro: copy.contactIntro,
     contact: {
       whatsapp: phone,
       email,
-      address: "Rua Exemplo, 123 - Centro",
-      hours: isBakery ? "Segunda a sábado, das 6h às 20h" : "Segunda a sexta, das 9h às 18h",
+      address: copy.address,
+      hours: copy.hours,
     },
     social: [
       { label: "Instagram", href: "#" },
       { label: "Facebook", href: "#" },
       { label: "WhatsApp", href: "#contato" },
     ],
+  };
+}
+
+function buildTemplateTheme(industry: string, palette: Palette, requestedColor?: string) {
+  const normalized = normalize(industry);
+  const primary = normalizeColor(requestedColor ?? "") ?? palette.primary;
+
+  if (normalized.includes("padaria")) {
+    return {
+      background: "#fff8ea",
+      backgroundSoft: "#f8ead1",
+      card: "#fffdf8",
+      primary,
+      primaryDark: "#b85f3a",
+      secondary: "#3b2518",
+      text: "#3b2518",
+      muted: "#6f4f36",
+      border: "rgba(76, 45, 25, 0.14)",
+      shadow: "0 18px 50px rgba(92, 51, 20, 0.14)",
+    };
+  }
+
+  if (normalized.includes("barbearia")) {
+    return {
+      background: "#f7f2e8",
+      backgroundSoft: "#e8dcc6",
+      card: "#fffaf0",
+      primary,
+      primaryDark: "#8a5a18",
+      secondary: "#1f1711",
+      text: "#24170f",
+      muted: "#725f4a",
+      border: "rgba(36, 23, 15, 0.14)",
+      shadow: "0 18px 50px rgba(36, 23, 15, 0.14)",
+    };
+  }
+
+  if (normalized.includes("odont") || normalized.includes("clinica")) {
+    return {
+      background: "#eef9f8",
+      backgroundSoft: "#d8efed",
+      card: "#ffffff",
+      primary,
+      primaryDark: "#0f766e",
+      secondary: "#143d4a",
+      text: "#102f3a",
+      muted: "#4c6c73",
+      border: "rgba(20, 61, 74, 0.14)",
+      shadow: "0 18px 50px rgba(20, 61, 74, 0.12)",
+    };
+  }
+
+  if (normalized.includes("oficina") || normalized.includes("mecanica")) {
+    return {
+      background: "#f4f1ea",
+      backgroundSoft: "#ded8ca",
+      card: "#fffdf8",
+      primary,
+      primaryDark: "#b45309",
+      secondary: "#1f2933",
+      text: "#1f2933",
+      muted: "#61707d",
+      border: "rgba(31, 41, 51, 0.14)",
+      shadow: "0 18px 50px rgba(31, 41, 51, 0.14)",
+    };
+  }
+
+  if (normalized.includes("roupa") || normalized.includes("moda")) {
+    return {
+      background: "#fff6f7",
+      backgroundSoft: "#f3e3e8",
+      card: "#ffffff",
+      primary,
+      primaryDark: "#be185d",
+      secondary: "#27212c",
+      text: "#2a1f2c",
+      muted: "#7a6674",
+      border: "rgba(42, 31, 44, 0.12)",
+      shadow: "0 18px 50px rgba(42, 31, 44, 0.12)",
+    };
+  }
+
+  if (normalized.includes("restaurante")) {
+    return {
+      background: "#fff7ed",
+      backgroundSoft: "#f4dbc1",
+      card: "#fffdf8",
+      primary,
+      primaryDark: "#9f1239",
+      secondary: "#451a03",
+      text: "#3d1f10",
+      muted: "#7c5c45",
+      border: "rgba(69, 26, 3, 0.14)",
+      shadow: "0 18px 50px rgba(69, 26, 3, 0.14)",
+    };
+  }
+
+  if (normalized.includes("academia")) {
+    return {
+      background: "#10140f",
+      backgroundSoft: "#1b2418",
+      card: "#f8fff4",
+      primary,
+      primaryDark: "#16a34a",
+      secondary: "#f8fff4",
+      text: "#f8fff4",
+      muted: "#b9c9b3",
+      border: "rgba(248, 255, 244, 0.16)",
+      shadow: "0 18px 50px rgba(0, 0, 0, 0.22)",
+    };
+  }
+
+  return {
+    background: "#f6f4ee",
+    backgroundSoft: "#e8e1d2",
+    card: "#fffdf8",
+    primary,
+    primaryDark: palette.secondary,
+    secondary: palette.surface,
+    text: "#24211d",
+    muted: "#6d665c",
+    border: "rgba(36, 33, 29, 0.14)",
+    shadow: "0 18px 50px rgba(36, 33, 29, 0.12)",
+  };
+}
+
+function buildTemplateCopy(industry: string, siteName: string, nicheLabel: string, features: string[]) {
+  const normalized = normalize(industry);
+  const defaultDifferentials = unique(features.slice(0, 4)).map((feature) => ({
+    title: feature,
+    text: buildFeatureText(feature),
+  }));
+
+  const common = {
+    templateSource: "zszoro/Site.git",
+    headerCta: "Chamar no WhatsApp",
+    productsNavLabel: "Serviços",
+    menuNavLabel: "Oferta",
+    heroImageAlt: "",
+    promoImageAlt: "",
+    address: "Rua Exemplo, 123 - Centro",
+    hours: "Segunda a sexta, das 9h às 18h",
+    testimonialsTitle: "Quem conhece, recomenda",
+    testimonialsIntro: "Comentários fictícios para demonstrar prova social sem copiar marcas ou textos reais.",
+    contactTitle: "Contato e atendimento",
+    contactIntro: "Chame pelo WhatsApp, tire dúvidas e avance para o próximo passo.",
+  };
+
+  if (normalized.includes("padaria")) {
+    return {
+      ...common,
+      brandTagline: "fornada artesanal",
+      headerCta: "Fazer pedido",
+      productsNavLabel: "Produtos",
+      menuNavLabel: "Cardápio",
+      whatsappMessage: `Olá, vim pelo site da ${siteName} e quero fazer um pedido.`,
+      heroImageAlt: "Cesta de pães artesanais sobre bancada de padaria",
+      promoImageAlt: "Bandeja de café da manhã com produtos de padaria",
+      hero: {
+        eyebrow: "Padaria artesanal",
+        title: "Pão fresco, café quente e carinho de bairro.",
+        subtitle: "Receitas artesanais preparadas todos os dias para deixar sua mesa mais acolhedora.",
+        primaryCta: "Fazer pedido",
+        secondaryCta: "Ver produtos",
+        cardTitle: "Fornada do dia",
+        cardText: "pães e doces saindo cedo",
+      },
+      about: {
+        title: "Padaria feita para a rotina da vizinhança",
+        text: `${siteName} reúne atendimento próximo, ingredientes selecionados e produção em pequenos lotes para café da manhã, pausa da tarde e pedidos para compartilhar.`,
+      },
+      differentials: [
+        {
+          title: "Pães frescos",
+          text: "Fornadas programadas ao longo do dia para manter textura, aroma e sabor.",
+        },
+        {
+          title: "Produção artesanal",
+          text: "Processos manuais e receitas próprias para criar produtos com personalidade.",
+        },
+        {
+          title: "Entrega rápida",
+          text: "Pedidos organizados para chegar com cuidado em bairros próximos.",
+        },
+        {
+          title: "Qualidade garantida",
+          text: "Ingredientes escolhidos e atendimento atento do primeiro contato à entrega.",
+        },
+      ],
+      categories: ["Pães", "Bolos", "Doces", "Salgados", "Bebidas"],
+      productsTitle: "Produtos para todos os momentos",
+      productsIntro: "Escolha por categoria e monte seu pedido com itens fictícios de padaria artesanal.",
+      promo: {
+        eyebrow: "Destaque",
+        title: "Combo do café da manhã",
+        text: "Pães artesanais, fatia de bolo, café coado e suco natural para duas pessoas.",
+        metaLabel: "A partir de",
+        price: "R$ 49,90",
+        cta: "Pedir no WhatsApp",
+      },
+      testimonialsTitle: "Quem prova, volta",
+      testimonialsIntro: "Comentários fictícios de clientes para demonstrar a seção de depoimentos.",
+      testimonials: [
+        {
+          name: "Marina Lopes",
+          role: "cliente do bairro",
+          rating: "★★★★★",
+          comment: "Os pães chegam quentinhos e o atendimento é sempre muito atencioso.",
+        },
+        {
+          name: "Rafael Torres",
+          role: "pedido para escritório",
+          rating: "★★★★★",
+          comment: "O combo de café resolveu nossa reunião da manhã com praticidade.",
+        },
+        {
+          name: "Clara Menezes",
+          role: "encomendas de fim de semana",
+          rating: "★★★★★",
+          comment: "Bolos bem apresentados, doces na medida e entrega dentro do horário.",
+        },
+      ],
+      contactTitle: "Contato e funcionamento",
+      contactIntro: "Faça seu pedido, consulte disponibilidade ou passe para buscar sua fornada.",
+      address: "Rua das Oliveiras, 128 - Centro",
+      hours: "Segunda a sábado, 6h30 às 19h",
+    };
+  }
+
+  if (normalized.includes("barbearia")) {
+    return buildBusinessCopy({
+      ...common,
+      siteName,
+      niche: "barbearia premium",
+      brandTagline: "corte, barba e estilo",
+      heroTitle: "Corte alinhado, barba precisa e experiência sem pressa.",
+      heroSubtitle: "Agende horários, conheça serviços e veja o visual da barbearia em uma página direta para converter visitantes.",
+      cardTitle: "Agenda aberta",
+      cardText: "cortes, barba e combos para a semana",
+      aboutTitle: "Barbearia feita para rotina e presença",
+      aboutText: `${siteName} apresenta serviços, equipe, ambiente e contato rápido para clientes que querem agendar com confiança.`,
+      productsTitle: "Serviços mais pedidos",
+      productsIntro: "Escolha o serviço e chame no WhatsApp para confirmar horário.",
+      promoTitle: "Combo corte + barba",
+      promoText: "Atendimento completo com corte, barba desenhada, toalha quente e finalização.",
+      promoPrice: "R$ 89,90",
+      categories: ["Cortes", "Barba", "Combos", "Tratamentos"],
+      differentials: defaultDifferentials,
+    });
+  }
+
+  if (normalized.includes("odont")) {
+    return buildBusinessCopy({
+      ...common,
+      siteName,
+      niche: "clínica odontológica",
+      brandTagline: "sorrisos com cuidado",
+      heroTitle: "Atendimento odontológico claro, moderno e acolhedor.",
+      heroSubtitle: "Mostre tratamentos, equipe, estrutura e canais de agendamento em uma página confiável e responsiva.",
+      cardTitle: "Avaliação inicial",
+      cardText: "orientação, prevenção e plano de cuidado",
+      aboutTitle: "Confiança desde o primeiro contato",
+      aboutText: `${siteName} organiza tratamentos, diferenciais, horários e contato para facilitar a decisão do paciente.`,
+      productsTitle: "Tratamentos em destaque",
+      productsIntro: "Serviços organizados para explicar benefícios e próximos passos.",
+      promoTitle: "Avaliação odontológica",
+      promoText: "Primeira conversa para entender necessidades, orientar o paciente e indicar o melhor tratamento.",
+      promoPrice: "Sob consulta",
+      categories: ["Prevenção", "Estética", "Ortodontia", "Implantes"],
+      differentials: defaultDifferentials,
+    });
+  }
+
+  if (normalized.includes("oficina") || normalized.includes("mecanica")) {
+    return buildBusinessCopy({
+      ...common,
+      siteName,
+      niche: "oficina mecânica",
+      brandTagline: "diagnóstico e manutenção",
+      heroTitle: "Oficina organizada para revisão, reparo e confiança.",
+      heroSubtitle: "Mostre serviços automotivos, diferenciais, horários e contato rápido com imagens do nicho.",
+      cardTitle: "Diagnóstico rápido",
+      cardText: "revisão, manutenção e orçamento",
+      aboutTitle: "Serviço técnico com comunicação clara",
+      aboutText: `${siteName} ajuda o cliente a entender serviços, pedir orçamento e escolher o melhor horário para levar o veículo.`,
+      productsTitle: "Serviços automotivos",
+      productsIntro: "Categorias prontas para revisão, freios, óleo, suspensão e diagnóstico.",
+      promoTitle: "Check-up preventivo",
+      promoText: "Inspeção inicial para identificar pontos de atenção antes de virar problema.",
+      promoPrice: "A partir de R$ 99,90",
+      categories: ["Revisão", "Freios", "Óleo", "Suspensão"],
+      differentials: defaultDifferentials,
+    });
+  }
+
+  if (normalized.includes("roupa") || normalized.includes("moda")) {
+    return buildBusinessCopy({
+      ...common,
+      siteName,
+      niche: "loja de roupas",
+      brandTagline: "moda selecionada",
+      heroTitle: "Coleções com estilo, vitrine bonita e compra fácil.",
+      heroSubtitle: "Apresente peças, categorias, destaques e contato em uma experiência visual para vender mais.",
+      cardTitle: "Nova coleção",
+      cardText: "looks, acessórios e atendimento personalizado",
+      aboutTitle: "Moda organizada para inspirar escolha",
+      aboutText: `${siteName} destaca produtos, identidade visual e atendimento para transformar visitantes em compradores.`,
+      productsTitle: "Peças em destaque",
+      productsIntro: "Categorias prontas para montar uma vitrine responsiva e visual.",
+      promoTitle: "Look completo da semana",
+      promoText: "Combinação de peças selecionadas para facilitar a compra por WhatsApp.",
+      promoPrice: "A partir de R$ 159,90",
+      categories: ["Feminino", "Masculino", "Acessórios", "Novidades"],
+      differentials: defaultDifferentials,
+    });
+  }
+
+  if (normalized.includes("restaurante")) {
+    return buildBusinessCopy({
+      ...common,
+      siteName,
+      niche: "restaurante",
+      brandTagline: "cozinha autoral",
+      heroTitle: "Pratos marcantes, reserva fácil e sabor de casa.",
+      heroSubtitle: "Mostre ambiente, cardápio, horários e WhatsApp com uma página feita para gerar reservas.",
+      cardTitle: "Mesa pronta",
+      cardText: "pratos, reservas e atendimento direto",
+      aboutTitle: "Experiência que começa antes da reserva",
+      aboutText: `${siteName} apresenta pratos, clima do salão e contato para deixar a decisão simples.`,
+      productsTitle: "Cardápio em destaque",
+      productsIntro: "Categorias para entradas, pratos, sobremesas e bebidas.",
+      promoTitle: "Menu especial da casa",
+      promoText: "Sugestão completa para duas pessoas com prato principal, sobremesa e bebida.",
+      promoPrice: "A partir de R$ 129,90",
+      categories: ["Entradas", "Pratos", "Sobremesas", "Bebidas"],
+      differentials: defaultDifferentials,
+    });
+  }
+
+  return buildBusinessCopy({
+    ...common,
+    siteName,
+    niche: nicheLabel,
+    brandTagline: "presença profissional",
+    heroTitle: `${siteName}: presença digital pronta para converter.`,
+    heroSubtitle: "Site responsivo com estrutura visual inspirada no template principal, imagens do nicho e contato direto.",
+    cardTitle: "Modelo editável",
+    cardText: "textos, cores e imagens adaptados por nicho",
+    aboutTitle: "Uma estrutura clara para vender melhor",
+    aboutText: `${siteName} apresenta a empresa com uma experiência objetiva, responsiva e preparada para crescer com novas páginas, APIs e integrações.`,
+    productsTitle: "Serviços em destaque",
+    productsIntro: "Blocos prontos para explicar ofertas, benefícios e próximos passos.",
+    promoTitle: "Oferta principal pronta para conversão",
+    promoText: "Bloco promocional para destacar o serviço mais importante e levar o visitante direto ao contato.",
+    promoPrice: "Sob consulta",
+    categories: ["Serviços", "Planos", "Resultados", "Contato"],
+    differentials: defaultDifferentials,
+  });
+}
+
+function buildBusinessCopy(input: {
+  siteName: string;
+  niche: string;
+  brandTagline: string;
+  headerCta: string;
+  productsNavLabel: string;
+  menuNavLabel: string;
+  heroImageAlt: string;
+  promoImageAlt: string;
+  address: string;
+  hours: string;
+  testimonialsTitle: string;
+  testimonialsIntro: string;
+  contactTitle: string;
+  contactIntro: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  cardTitle: string;
+  cardText: string;
+  aboutTitle: string;
+  aboutText: string;
+  productsTitle: string;
+  productsIntro: string;
+  promoTitle: string;
+  promoText: string;
+  promoPrice: string;
+  categories: string[];
+  differentials: Array<{ title: string; text: string }>;
+}) {
+  return {
+    brandTagline: input.brandTagline,
+    headerCta: "Chamar no WhatsApp",
+    productsNavLabel: input.productsNavLabel,
+    menuNavLabel: input.menuNavLabel,
+    whatsappMessage: `Olá, vim pelo site da ${input.siteName} e quero mais informações.`,
+    heroImageAlt: input.heroImageAlt,
+    promoImageAlt: input.promoImageAlt,
+    hero: {
+      eyebrow: input.niche,
+      title: input.heroTitle,
+      subtitle: input.heroSubtitle,
+      primaryCta: "Chamar no WhatsApp",
+      secondaryCta: "Ver serviços",
+      cardTitle: input.cardTitle,
+      cardText: input.cardText,
+    },
+    about: {
+      title: input.aboutTitle,
+      text: input.aboutText,
+    },
+    differentials: input.differentials.length
+      ? input.differentials
+      : [
+          { title: "Atendimento rápido", text: "Contato direto para tirar dúvidas e avançar sem demora." },
+          { title: "Visual profissional", text: "Layout responsivo com hierarquia clara e imagens do nicho." },
+          { title: "Conteúdo editável", text: "Textos, cores e imagens organizados em configuração simples." },
+          { title: "Contato direto", text: "CTA real para WhatsApp sem redirecionar para a tela inicial." },
+        ],
+    categories: input.categories,
+    productsTitle: input.productsTitle,
+    productsIntro: input.productsIntro,
+    promo: {
+      eyebrow: "Destaque",
+      title: input.promoTitle,
+      text: input.promoText,
+      metaLabel: "Valor",
+      price: input.promoPrice,
+      cta: "Conversar no WhatsApp",
+    },
+    testimonialsTitle: input.testimonialsTitle,
+    testimonialsIntro: input.testimonialsIntro,
+    testimonials: [
+      {
+        name: "Marina Costa",
+        role: "cliente",
+        rating: "★★★★★",
+        comment: "A página ficou clara, bonita e facilitou o contato.",
+      },
+      {
+        name: "Rafael Lima",
+        role: "cliente recorrente",
+        rating: "★★★★★",
+        comment: "Consegui entender serviços, diferenciais e próximo passo sem procurar muito.",
+      },
+      {
+        name: "Camila Rocha",
+        role: "novo contato",
+        rating: "★★★★★",
+        comment: "O visual passa confiança e combina com o nicho da empresa.",
+      },
+    ],
+    contactTitle: input.contactTitle,
+    contactIntro: input.contactIntro,
+    address: input.address,
+    hours: input.hours,
   };
 }
 
@@ -1419,15 +1914,210 @@ function buildBakeryGeneratedProducts(media: ReturnType<typeof getNicheMedia>) {
       image: "https://images.unsplash.com/photo-1568254183919-78a4f43a2877?auto=format&fit=crop&w=900&q=82",
       imageAlt: "Pão de queijo dourado servido quente",
     },
+    {
+      category: "Bebidas",
+      name: "Café coado",
+      description: "Servido fresco, com aroma marcante e sabor equilibrado.",
+      price: "R$ 6,00",
+      image: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=82",
+      imageAlt: "Café coado servido quente",
+    },
   ];
 }
 
-function buildGenericGeneratedProducts(industry: string, media: ReturnType<typeof getNicheMedia>) {
+function buildIndustryGeneratedProducts(industry: string, media: ReturnType<typeof getNicheMedia>) {
+  const normalized = normalize(industry);
+
+  if (normalized.includes("barbearia")) {
+    return [
+      {
+        category: "Cortes",
+        name: "Corte clássico",
+        description: "Corte alinhado com acabamento preciso e finalização.",
+        price: "R$ 49,90",
+        image: media.hero,
+        imageAlt: "Corte masculino em barbearia",
+      },
+      {
+        category: "Barba",
+        name: "Barba desenhada",
+        description: "Toalha quente, desenho de barba e hidratação.",
+        price: "R$ 39,90",
+        image: media.secondary,
+        imageAlt: "Barba sendo finalizada em barbearia",
+      },
+      {
+        category: "Combos",
+        name: "Corte + barba",
+        description: "Serviço completo para renovar visual em uma visita.",
+        price: "R$ 89,90",
+        image: media.tertiary,
+        imageAlt: "Atendimento premium em barbearia",
+      },
+      {
+        category: "Tratamentos",
+        name: "Hidratação capilar",
+        description: "Cuidado extra para cabelo com acabamento natural.",
+        price: "R$ 29,90",
+        image: media.secondary,
+        imageAlt: "Produtos e ferramentas de barbearia",
+      },
+    ];
+  }
+
+  if (normalized.includes("odont")) {
+    return [
+      {
+        category: "Prevenção",
+        name: "Limpeza profissional",
+        description: "Cuidados preventivos para manter saúde bucal em dia.",
+        price: "Sob consulta",
+        image: media.hero,
+        imageAlt: "Atendimento odontológico preventivo",
+      },
+      {
+        category: "Estética",
+        name: "Clareamento",
+        description: "Procedimento orientado para melhorar a estética do sorriso.",
+        price: "Sob consulta",
+        image: media.secondary,
+        imageAlt: "Consultório odontológico moderno",
+      },
+      {
+        category: "Ortodontia",
+        name: "Avaliação ortodôntica",
+        description: "Plano inicial para alinhamento e acompanhamento.",
+        price: "Sob consulta",
+        image: media.tertiary,
+        imageAlt: "Paciente em avaliação odontológica",
+      },
+      {
+        category: "Implantes",
+        name: "Planejamento de implantes",
+        description: "Atendimento para entender caso, exames e próximos passos.",
+        price: "Sob consulta",
+        image: media.secondary,
+        imageAlt: "Equipe odontológica em atendimento",
+      },
+    ];
+  }
+
+  if (normalized.includes("oficina") || normalized.includes("mecanica")) {
+    return [
+      {
+        category: "Revisão",
+        name: "Revisão completa",
+        description: "Checklist preventivo para rodar com mais segurança.",
+        price: "A partir de R$ 149,90",
+        image: media.hero,
+        imageAlt: "Mecânico revisando veículo",
+      },
+      {
+        category: "Freios",
+        name: "Sistema de freios",
+        description: "Diagnóstico de pastilhas, discos e fluido.",
+        price: "Sob consulta",
+        image: media.secondary,
+        imageAlt: "Manutenção automotiva em oficina",
+      },
+      {
+        category: "Óleo",
+        name: "Troca de óleo",
+        description: "Óleo, filtros e conferência de itens essenciais.",
+        price: "A partir de R$ 119,90",
+        image: media.tertiary,
+        imageAlt: "Carro em manutenção",
+      },
+      {
+        category: "Suspensão",
+        name: "Suspensão e alinhamento",
+        description: "Avaliação de ruídos, estabilidade e desgaste.",
+        price: "Sob consulta",
+        image: media.secondary,
+        imageAlt: "Oficina mecânica com ferramentas",
+      },
+    ];
+  }
+
+  if (normalized.includes("roupa") || normalized.includes("moda")) {
+    return [
+      {
+        category: "Feminino",
+        name: "Look casual",
+        description: "Peças leves para rotina com acabamento elegante.",
+        price: "R$ 129,90",
+        image: media.hero,
+        imageAlt: "Vitrine de loja de roupas",
+      },
+      {
+        category: "Masculino",
+        name: "Camisa essencial",
+        description: "Modelagem versátil para trabalho e fim de semana.",
+        price: "R$ 99,90",
+        image: media.secondary,
+        imageAlt: "Araras com roupas em loja",
+      },
+      {
+        category: "Acessórios",
+        name: "Bolsa urbana",
+        description: "Acessório prático para completar a composição.",
+        price: "R$ 149,90",
+        image: media.tertiary,
+        imageAlt: "Editorial de moda com acessórios",
+      },
+      {
+        category: "Novidades",
+        name: "Coleção semanal",
+        description: "Curadoria de peças recém-chegadas para montar looks.",
+        price: "A partir de R$ 79,90",
+        image: media.secondary,
+        imageAlt: "Loja de moda com coleção nova",
+      },
+    ];
+  }
+
+  if (normalized.includes("restaurante")) {
+    return [
+      {
+        category: "Entradas",
+        name: "Entrada da casa",
+        description: "Porção para abrir a experiência com sabor e textura.",
+        price: "R$ 34,90",
+        image: media.hero,
+        imageAlt: "Mesa de restaurante preparada",
+      },
+      {
+        category: "Pratos",
+        name: "Prato principal",
+        description: "Receita marcante com ingredientes frescos.",
+        price: "R$ 69,90",
+        image: media.secondary,
+        imageAlt: "Prato servido em restaurante",
+      },
+      {
+        category: "Sobremesas",
+        name: "Sobremesa especial",
+        description: "Finalização doce para compartilhar.",
+        price: "R$ 24,90",
+        image: media.tertiary,
+        imageAlt: "Sobremesa de restaurante",
+      },
+      {
+        category: "Bebidas",
+        name: "Drink autoral",
+        description: "Bebida preparada para acompanhar o cardápio.",
+        price: "R$ 29,90",
+        image: media.secondary,
+        imageAlt: "Bebida servida em restaurante",
+      },
+    ];
+  }
+
   const label = titleCase(industry);
 
   return [
     {
-      category: "Essencial",
+      category: "Serviços",
       name: `Plano ${label}`,
       description: "Apresentação clara do serviço principal com chamada de contato.",
       price: "Sob consulta",
@@ -1435,7 +2125,7 @@ function buildGenericGeneratedProducts(industry: string, media: ReturnType<typeo
       imageAlt: media.secondaryAlt,
     },
     {
-      category: "Profissional",
+      category: "Planos",
       name: "Atendimento completo",
       description: "Bloco para explicar benefícios, processo e próximos passos.",
       price: "Sob consulta",
@@ -1443,7 +2133,7 @@ function buildGenericGeneratedProducts(industry: string, media: ReturnType<typeo
       imageAlt: media.secondaryAlt,
     },
     {
-      category: "Premium",
+      category: "Resultados",
       name: "Experiência personalizada",
       description: "Oferta destacada para clientes que precisam de solução sob medida.",
       price: "Sob consulta",
