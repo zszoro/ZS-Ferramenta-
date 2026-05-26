@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "project": "ZS Ferramenta",
+  "components": [
+    {
+      "name": "AiBuilderApp",
+      "path": "src/components/ai-builder-app.tsx",
+      "role": "App shell com chat, preview, auth local, tokens e modais"
+    },
+    {
+      "name": "CreateProjectModal",
+      "path": "src/components/ai-builder-app.tsx",
+      "role": "Briefing inicial com nome, nicho, WhatsApp, email e cor"
+    },
+    {
+      "name": "PreviewPanel",
+      "path": "src/components/ai-builder-app.tsx",
+      "role": "Preview desktop/mobile, copiar, exportar e tela cheia"
+    },
+    {
+      "name": "LoginRegisterModal template",
+      "path": "components/auth/login-register-modal.tsx.txt",
+      "role": "Template reutilizavel para auth em sites gerados"
+    },
+    {
+      "name": "BakeryProducts template",
+      "path": "components/site-sections/bakery-products.tsx.txt",
+      "role": "Template reutilizavel de produtos para padarias"
+    }
+  ]
+}

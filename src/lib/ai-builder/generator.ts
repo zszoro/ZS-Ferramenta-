@@ -1,3 +1,5 @@
+import { buildAugmentedPrompt, getReusableTemplateFiles } from "./context";
+
 export type BuilderFile = {
   path: string;
   language: string;
@@ -208,14 +210,21 @@ export function buildProjectFromBrief(brief: ProjectBrief): BuilderProject {
   const industry = detectIndustry(cleanBrief.niche);
   const palette = buildPaletteFromColor(cleanBrief.primaryColor, prompt);
   const features = buildFeatures(prompt, "site", industry);
+  const projectName = titleCase(cleanBrief.companyName);
+  const augmentedPrompt = `${prompt}\n\nContexto IA:\n${buildAugmentedPrompt({
+    message: prompt,
+    industry,
+    projectName,
+    brief: cleanBrief,
+  })}`;
   const summary = `${cleanBrief.companyName} e um site profissional para ${industry}, com imagem real do nicho, CTA de contato, prova social, servicos e uma primeira estrutura pronta para publicar.`;
 
   return {
     id: createId(prompt),
-    name: titleCase(cleanBrief.companyName),
+    name: projectName,
     kind: "site",
     summary,
-    prompt,
+    prompt: augmentedPrompt,
     industry,
     paletteName: palette.name,
     brief: cleanBrief,
@@ -227,10 +236,10 @@ export function buildProjectFromBrief(brief: ProjectBrief): BuilderProject {
       "Arquivos sugeridos preparados para evoluir o projeto.",
     ],
     features,
-    files: buildFiles(cleanBrief.companyName, "site", features, prompt, cleanBrief),
+    files: buildFiles(cleanBrief.companyName, "site", features, augmentedPrompt, cleanBrief),
     previewHtml: buildPreviewHtml({
-      prompt,
-      name: titleCase(cleanBrief.companyName),
+      prompt: augmentedPrompt,
+      name: projectName,
       kind: "site",
       industry,
       features,
@@ -252,6 +261,11 @@ export function buildProjectFromPrompt(prompt: string): BuilderProject {
   const palette = pickPalette(cleanPrompt);
   const name = buildName(cleanPrompt, industry, kind);
   const features = buildFeatures(cleanPrompt, kind, industry);
+  const augmentedPrompt = `${cleanPrompt}\n\nContexto IA:\n${buildAugmentedPrompt({
+    message: cleanPrompt,
+    industry,
+    projectName: name,
+  })}`;
   const steps = [
     "Entendimento do publico, objetivo e tipo de produto.",
     "Definicao de arquitetura visual, paginas e componentes.",
@@ -269,14 +283,14 @@ export function buildProjectFromPrompt(prompt: string): BuilderProject {
     name,
     kind,
     summary,
-    prompt: cleanPrompt,
+    prompt: augmentedPrompt,
     industry,
     paletteName: palette.name,
     steps,
     features,
-    files: buildFiles(name, kind, features, cleanPrompt),
+    files: buildFiles(name, kind, features, augmentedPrompt),
     previewHtml: buildPreviewHtml({
-      prompt: cleanPrompt,
+      prompt: augmentedPrompt,
       name,
       kind,
       industry,
@@ -389,6 +403,12 @@ function looksLikeEdit(prompt: string) {
     "cor",
     "botao",
     "secao",
+    "imagem",
+    "foto",
+    "banner",
+    "descricao",
+    "po de queijo",
+    "pao de queijo",
     "seção",
     "whatsapp",
     "pagamento",
@@ -565,7 +585,7 @@ function extractRequestedName(prompt: string) {
 
   for (const pattern of patterns) {
     const match = prompt.match(pattern)?.[1];
-    if (match) return titleCase(cleanName(match));
+    if (match && !isStyleOnlyTitleValue(match)) return titleCase(cleanName(match));
   }
 
   return null;
@@ -591,6 +611,9 @@ function buildFeatures(
   if (lower.includes("agendamento") || lower.includes("horario")) base.push("Agendamento online");
   if (lower.includes("admin")) base.push("Painel administrativo");
   if (lower.includes("websocket") || lower.includes("tempo real")) base.push("Realtime");
+  if (industry === "padarias") {
+    base.push("Catalogo de produtos", "Combo promocional", "Depoimentos", "Contato com mapa");
+  }
   if (industry !== "negocios digitais") base.push(`Copy adaptada para ${industry}`);
 
   return unique(base).slice(0, 8);
@@ -650,6 +673,8 @@ function buildFiles(
     },
   ];
 
+  files.push(...getReusableTemplateFiles(slug));
+
   if (wantsDashboard) {
     files.push({
       path: "src/app/dashboard/page.tsx",
@@ -699,14 +724,16 @@ function buildPreviewHtml(input: {
 }) {
   const isDashboard = input.kind === "dashboard" || input.kind === "saas";
   const escapedName = escapeHtml(input.name);
-  const media = getNicheMedia(input.industry);
+  const directives = extractPreviewDirectives(input.prompt);
+  const media = applyMediaDirectives(getNicheMedia(input.industry), directives);
   const profile = getNicheProfile(input.industry, input.name);
   const theme = profile.theme;
   const contact = buildContact(input.brief);
+  const isBakery = normalize(input.industry).includes("padaria");
   const description = escapeHtml(
     isDashboard
       ? `Sistema para ${input.industry} com clientes, automacoes, metricas e operacao em um so lugar.`
-      : profile.description,
+      : directives.description || profile.description,
   );
   const promptSummary = escapeHtml(firstSentence(input.prompt || "Projeto gerado pela IA ZS."));
   const editNotes = input.editNotes
@@ -731,8 +758,13 @@ function buildPreviewHtml(input: {
     .filter(Boolean)
     .join("");
   const navItems = profile.navItems
-    .map((item, index) => `<a href="${index === profile.navItems.length - 1 ? "#contato" : "#servicos"}">${escapeHtml(item)}</a>`)
+    .map((item) => `<a href="${getNavTarget(item)}">${escapeHtml(item)}</a>`)
     .join("");
+  const secondaryHref = isBakery ? "#produtos" : "#servicos";
+  const bakerySections = isBakery ? buildBakerySections(input.name, contact) : "";
+  const mapBlock = isBakery
+    ? `<div class="map-placeholder">Mapa da regiao<br><span>Espaco pronto para incorporar Google Maps ou mapa estatico.</span></div>`
+    : "";
   const dashboardSurface = `
       <section class="product dashboard-panel" aria-label="Preview do produto">
         <div class="toolbar">
@@ -783,6 +815,7 @@ function buildPreviewHtml(input: {
       --line: ${theme.line};
       --header: ${theme.header};
       --accent: ${input.palette.primary};
+      --heading: ${directives.titleColor ?? theme.text};
       --accent-soft: ${theme.accentSoft};
       --shadow: ${theme.shadow};
     }
@@ -871,6 +904,7 @@ function buildPreviewHtml(input: {
       line-height: .96;
       letter-spacing: 0;
       font-weight: 700;
+      color: var(--heading);
     }
     h1::selection, p::selection, strong::selection, span::selection {
       background: var(--accent);
@@ -1053,6 +1087,112 @@ function buildPreviewHtml(input: {
       line-height: 1.5;
       font-size: 13px;
     }
+    .section-title {
+      margin: 0 0 18px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(34px, 5vw, 56px);
+      line-height: 1;
+      color: var(--heading);
+    }
+    .catalog, .promo, .testimonials {
+      margin: 0 0 64px;
+      scroll-margin-top: 90px;
+    }
+    .category-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .category-tabs span {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      padding: 9px 12px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .product-grid, .testimonial-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .product-card, .testimonial-card, .promo {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .product-card img {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      display: block;
+    }
+    .product-card div, .testimonial-card {
+      padding: 16px;
+    }
+    .product-card small {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+    .product-card h3, .testimonial-card h3 {
+      margin: 8px 0;
+      font-size: 20px;
+    }
+    .product-card p, .testimonial-card p {
+      color: var(--muted);
+      line-height: 1.55;
+      margin: 0;
+      font-size: 14px;
+    }
+    .product-card strong {
+      display: block;
+      margin-top: 12px;
+      font-size: 18px;
+    }
+    .promo {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, .7fr);
+      align-items: center;
+      gap: 18px;
+      padding: clamp(22px, 4vw, 42px);
+      background:
+        linear-gradient(135deg, var(--accent-soft), var(--surface-strong));
+    }
+    .promo p {
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .promo img {
+      width: 100%;
+      min-height: 260px;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+    .map-placeholder {
+      margin-top: 18px;
+      display: grid;
+      place-items: center;
+      min-height: 160px;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      background: var(--surface-strong);
+      color: var(--text);
+      text-align: center;
+      font-weight: 900;
+    }
+    .map-placeholder span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
     .edit-log {
       margin-top: 16px;
       color: var(--muted);
@@ -1127,6 +1267,7 @@ function buildPreviewHtml(input: {
     @media (max-width: 860px) {
       .hero { grid-template-columns: 1fr; }
       .features { grid-template-columns: 1fr; }
+      .product-grid, .testimonial-grid, .promo { grid-template-columns: 1fr; }
       .story { grid-template-columns: 1fr; }
       nav { display: none; }
       .toolbar, .metrics { grid-template-columns: 1fr; }
@@ -1145,13 +1286,13 @@ function buildPreviewHtml(input: {
       <nav>${navItems}</nav>
       ${contact.primary ? `<a class="nav-cta" href="${contact.primaryHref}">${contact.primary}</a>` : ""}
     </header>
-    <section class="hero">
+    <section id="inicio" class="hero">
       <div>
         <h1>${isDashboard ? "Operacao pronta para escalar" : escapeHtml(profile.headline)}</h1>
         <p class="lead">${description}</p>
         <div class="actions">
           <a class="primary" href="${contact.primaryHref}">${contact.primary || "Comecar agora"}</a>
-          <a class="secondary" href="#servicos">Ver servicos</a>
+          <a class="secondary" href="${secondaryHref}">${isBakery ? "Ver produtos" : "Ver servicos"}</a>
         </div>
         <div class="proof">
           ${profile.proofPoints.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
@@ -1164,20 +1305,121 @@ function buildPreviewHtml(input: {
       </div>
       ${productSurface}
     </section>
-    <section id="servicos" class="features">${featureCards}</section>
+    <section id="${isBakery ? "sobre" : "servicos"}" class="features">${featureCards}</section>
+    ${bakerySections}
     <section id="contato" class="story">
       <img src="${media.tertiary}" alt="${escapeHtml(media.tertiaryAlt)}" referrerpolicy="no-referrer" />
       <div class="story-panel">
         <h2>${escapeHtml(profile.storyTitle)}</h2>
         <p>${escapeHtml(profile.storyText)}</p>
         <div class="contact-card">${contactRows}</div>
+        ${mapBlock}
         <p class="credit">Imagens gratuitas via Unsplash. ${escapeHtml(media.credit)}</p>
       </div>
     </section>
-    <footer><span>Gerado pela IA ZS</span><span>${promptSummary}</span></footer>
+    <footer><span>${escapedName}</span><span>${promptSummary}</span><span>Gerado pela IA ZS</span></footer>
   </main>
 </body>
 </html>`;
+}
+
+function buildBakerySections(name: string, contact: ReturnType<typeof buildContact>) {
+  const escapedName = escapeHtml(titleCase(name));
+  const contactHref = contact.primaryHref;
+  const products = [
+    {
+      category: "Paes",
+      name: "Pao frances artesanal",
+      description: "Casquinha crocante, miolo leve e fornada ao longo do dia.",
+      price: "R$ 0,90",
+      image: "https://images.unsplash.com/photo-1549931319-a545dcf3bc73?auto=format&fit=crop&w=900&q=82",
+    },
+    {
+      category: "Salgados",
+      name: "Pao de queijo",
+      description: "Porcao quentinha, dourada e perfeita para o cafe da manha.",
+      price: "R$ 5,90",
+      image: "https://images.unsplash.com/photo-1568254183919-78a4f43a2877?auto=format&fit=crop&w=900&q=82",
+    },
+    {
+      category: "Bolos",
+      name: "Bolo caseiro",
+      description: "Massa fofinha com sabores do dia e cobertura simples.",
+      price: "R$ 24,90",
+      image: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=82",
+    },
+    {
+      category: "Doces",
+      name: "Sonho de creme",
+      description: "Recheio delicado, acucar leve e preparo artesanal.",
+      price: "R$ 7,90",
+      image: "https://images.unsplash.com/photo-1486427944299-d1955d23e34d?auto=format&fit=crop&w=900&q=82",
+    },
+    {
+      category: "Bebidas",
+      name: "Cafe coado",
+      description: "Cafe fresco para acompanhar paes, bolos e salgados.",
+      price: "R$ 6,90",
+      image: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=82",
+    },
+    {
+      category: "Combos",
+      name: "Cesta da manha",
+      description: "Selecao de paes, bolo, doce e bebida para pedir rapido.",
+      price: "R$ 39,90",
+      image: "https://images.unsplash.com/photo-1517433670267-08bbd4be890f?auto=format&fit=crop&w=900&q=82",
+    },
+  ];
+
+  const productCards = products
+    .map(
+      (product) => `
+        <article class="product-card">
+          <img src="${product.image}" alt="${escapeHtml(product.name)}" referrerpolicy="no-referrer" />
+          <div>
+            <small>${escapeHtml(product.category)}</small>
+            <h3>${escapeHtml(product.name)}</h3>
+            <p>${escapeHtml(product.description)}</p>
+            <strong>${escapeHtml(product.price)}</strong>
+          </div>
+        </article>`,
+    )
+    .join("");
+  const testimonials = [
+    ["Marina Lopes", "★★★★★", "O pao chega sempre quente e o atendimento pelo WhatsApp e muito rapido."],
+    ["Carlos Mendes", "★★★★★", "A vitrine online ficou clara. Encomendei bolo e salgados sem precisar ligar."],
+    ["Aline Rocha", "★★★★★", "O combo do cafe da manha virou pedido fixo aqui em casa."],
+  ]
+    .map(
+      ([client, rating, text]) => `
+        <article class="testimonial-card">
+          <h3>${escapeHtml(client)}</h3>
+          <strong>${escapeHtml(rating)}</strong>
+          <p>${escapeHtml(text)}</p>
+        </article>`,
+    )
+    .join("");
+
+  return `
+    <section id="produtos" class="catalog">
+      <h2 class="section-title">Produtos frescos da ${escapedName}</h2>
+      <div class="category-tabs">
+        <span>Paes</span><span>Bolos</span><span>Doces</span><span>Salgados</span><span>Bebidas</span>
+      </div>
+      <div class="product-grid">${productCards}</div>
+    </section>
+    <section id="cardapio" class="promo">
+      <div>
+        <h2 class="section-title">Combo do cafe da manha</h2>
+        <p>Monte um pedido com paes frescos, pao de queijo, bolo caseiro, doce do dia e cafe. Um bloco promocional pronto para conectar ao WhatsApp ou checkout.</p>
+        <a class="primary" href="${contactHref}">Pedir combo</a>
+      </div>
+      <img src="https://images.unsplash.com/photo-1517433367423-c7e5b0f35086?auto=format&fit=crop&w=900&q=82" alt="Combo de cafe da manha com produtos de padaria" referrerpolicy="no-referrer" />
+    </section>
+    <section id="depoimentos" class="testimonials">
+      <h2 class="section-title">Clientes que voltam toda semana</h2>
+      <div class="testimonial-grid">${testimonials}</div>
+    </section>`;
 }
 
 function normalizeBrief(brief: ProjectBrief): ProjectBrief {
@@ -1203,6 +1445,139 @@ function buildContact(brief?: ProjectBrief) {
     whatsappHref: "#contato",
     email: email ?? "",
   };
+}
+
+type PreviewDirectives = {
+  description?: string;
+  titleColor?: string;
+  imageTarget?: "pao de queijo" | "paes" | "bolos" | "doces" | "cafe";
+};
+
+function extractPreviewDirectives(prompt: string): PreviewDirectives {
+  const intent = latestPromptIntent(prompt);
+
+  return {
+    description: extractDescriptionOverride(intent),
+    titleColor: extractHeroTitleColor(intent),
+    imageTarget: extractImageTarget(intent),
+  };
+}
+
+function applyMediaDirectives<T extends ReturnType<typeof getNicheMedia>>(
+  media: T,
+  directives: PreviewDirectives,
+) {
+  if (!directives.imageTarget) return media;
+
+  const imageByTarget = {
+    "pao de queijo": {
+      url: "https://images.unsplash.com/photo-1568254183919-78a4f43a2877?auto=format&fit=crop&w=1200&q=82",
+      alt: "Pao de queijo dourado servido quente",
+    },
+    paes: {
+      url: "https://images.unsplash.com/photo-1549931319-a545dcf3bc73?auto=format&fit=crop&w=1200&q=82",
+      alt: "Paes artesanais recem assados",
+    },
+    bolos: {
+      url: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=1200&q=82",
+      alt: "Bolo caseiro em destaque",
+    },
+    doces: {
+      url: "https://images.unsplash.com/photo-1486427944299-d1955d23e34d?auto=format&fit=crop&w=1200&q=82",
+      alt: "Doces de padaria em vitrine",
+    },
+    cafe: {
+      url: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=82",
+      alt: "Cafe fresco servido na padaria",
+    },
+  } satisfies Record<NonNullable<PreviewDirectives["imageTarget"]>, { url: string; alt: string }>;
+  const nextImage = imageByTarget[directives.imageTarget];
+
+  return {
+    ...media,
+    secondary: nextImage.url,
+    secondaryAlt: nextImage.alt,
+  };
+}
+
+function extractDescriptionOverride(prompt: string) {
+  const patterns = [
+    /(?:troque|mude|altere|coloque|reescreva)[^.!?;\n]{0,80}?(?:descricao principal|descri[cç][aã]o principal|subtitulo|texto principal)[^.!?;\n]{0,24}?(?:para|por)\s+["']?([^"'.!?;\n]+(?:[.!?][^"'\n]+)?)/i,
+    /(?:descricao principal|descri[cç][aã]o principal|subtitulo|texto principal)[^.!?;\n]{0,24}?(?:para|por)\s+["']?([^"'.!?;\n]+(?:[.!?][^"'\n]+)?)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = prompt.match(pattern)?.[1]?.trim();
+    if (match) return cleanSentence(match, 180);
+  }
+
+  return undefined;
+}
+
+function extractHeroTitleColor(prompt: string) {
+  const lower = normalize(prompt);
+  if (!lower.includes("titulo") && !lower.includes("headline")) return undefined;
+
+  const hex = prompt.match(/#[0-9a-f]{3,6}\b/i)?.[0];
+  if (hex) return normalizeColor(hex) ?? undefined;
+
+  const colors: Array<[string, string]> = [
+    ["verde", "#22c55e"],
+    ["marrom", "#7a3f18"],
+    ["amarelo", "#d99a12"],
+    ["dourado", "#c47f17"],
+    ["azul", "#2563eb"],
+    ["vermelho", "#dc2626"],
+    ["rosa", "#db2777"],
+    ["roxo", "#7c3aed"],
+    ["preto", "#111111"],
+    ["branco", "#ffffff"],
+  ];
+
+  return colors.find(([name]) => lower.includes(name))?.[1];
+}
+
+function extractImageTarget(prompt: string): PreviewDirectives["imageTarget"] {
+  const lower = normalize(prompt);
+  if (!lower.includes("imagem") && !lower.includes("foto") && !lower.includes("banner")) {
+    return undefined;
+  }
+
+  if (lower.includes("pao de queijo") || lower.includes("po de queijo") || lower.includes("queijo")) {
+    return "pao de queijo";
+  }
+  if (lower.includes("bolo")) return "bolos";
+  if (lower.includes("doce") || lower.includes("sonho")) return "doces";
+  if (lower.includes("cafe")) return "cafe";
+  if (lower.includes("pao") || lower.includes("paes")) return "paes";
+
+  return undefined;
+}
+
+function getNavTarget(label: string) {
+  const lower = normalize(label);
+  if (lower.includes("inicio")) return "#inicio";
+  if (lower.includes("sobre")) return "#sobre";
+  if (lower.includes("produto")) return "#produtos";
+  if (lower.includes("cardapio")) return "#cardapio";
+  if (lower.includes("depoimento")) return "#depoimentos";
+  if (lower.includes("agenda")) return "#contato";
+  if (lower.includes("contato")) return "#contato";
+  return "#servicos";
+}
+
+function latestPromptIntent(prompt: string) {
+  const editMatches = Array.from(prompt.matchAll(/Edicao\s+\d+:\s*/gi));
+  const lastEdit = editMatches.at(-1);
+  if (lastEdit?.index !== undefined) {
+    return prompt.slice(lastEdit.index + lastEdit[0].length);
+  }
+
+  const marker = "Pedido do usuario:";
+  const lastMarkerIndex = prompt.lastIndexOf(marker);
+  if (lastMarkerIndex >= 0) return prompt.slice(lastMarkerIndex + marker.length);
+
+  return prompt;
 }
 
 function getNicheMedia(industry: string) {
@@ -1390,7 +1765,7 @@ function getNicheProfile(industry: string, name: string) {
       description:
         "Mostre paes, doces, lanches e encomendas com uma pagina acolhedora, visual e pronta para transformar visitantes em pedidos.",
       proofPoints: ["Fornada do dia", "Encomendas", "Cafe e lanches", "Contato rapido"],
-      navItems: ["Produtos", "Encomendas", "Contato"],
+      navItems: ["Inicio", "Sobre", "Produtos", "Cardapio", "Depoimentos", "Contato"],
       testimonial: "Clientes encontram a fornada, escolhem o pedido e chamam sem sair do preview.",
       theme: warmTheme,
     };
@@ -1521,6 +1896,10 @@ function buildFeatureText(feature: string) {
   if (normalized.includes("dashboard")) return "Indicadores e modulos organizados para gestao diaria.";
   if (normalized.includes("hero")) return "Primeiro impacto com mensagem direta e acao clara.";
   if (normalized.includes("whatsapp")) return "Chamada rapida para contato e conversao.";
+  if (normalized.includes("catalogo")) return "Produtos com categoria, imagem, descricao e preco.";
+  if (normalized.includes("combo")) return "Bloco promocional pronto para pedido rapido.";
+  if (normalized.includes("depoimento")) return "Prova social organizada em cards responsivos.";
+  if (normalized.includes("mapa")) return "Contato com endereco, horario e espaco para mapa.";
   if (normalized.includes("agendamento")) return "Base para agenda, horarios e confirmacoes.";
   if (normalized.includes("realtime")) return "Preparado para atualizacoes em tempo real.";
   return "Bloco reutilizavel para evoluir o produto com consistencia.";
@@ -1545,6 +1924,31 @@ function cleanName(input: string) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 42);
+}
+
+function cleanSentence(input: string, maxLength: number) {
+  return input
+    .replace(/\s+/g, " ")
+    .replace(/^["']|["']$/g, "")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function isStyleOnlyTitleValue(input: string) {
+  const lower = normalize(input).trim();
+  return [
+    "verde",
+    "verde neon",
+    "azul",
+    "vermelho",
+    "amarelo",
+    "marrom",
+    "dourado",
+    "preto",
+    "branco",
+    "rosa",
+    "roxo",
+  ].includes(lower) || /^#[0-9a-f]{3,6}$/i.test(input.trim());
 }
 
 function escapeHtml(input: string) {

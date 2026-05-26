@@ -19,6 +19,10 @@ O objetivo atual e criar sites, SaaS e sistemas automaticamente a partir de uma 
 - API principal em `src/app/api/ai/chat/route.ts`.
 - API legada de geracao em `src/app/api/ai/build/route.ts`.
 - Motor local de geracao e edicao em `src/lib/ai-builder/generator.ts`.
+- Contexto, prompt base e templates reutilizaveis em `src/lib/ai-builder/context.ts`.
+- RAG local deterministico em `src/lib/ai-builder/rag.ts`.
+- Registro multiagente em `src/lib/ai-builder/agents.ts`.
+- API de contexto em `src/app/api/ai/context/route.ts`.
 - Billing preparado em `src/app/api/billing/mercado-pago/route.ts`.
 
 ## Regras do Projeto
@@ -30,4 +34,7 @@ O objetivo atual e criar sites, SaaS e sistemas automaticamente a partir de uma 
 - Nao exponha tokens, secrets ou credenciais no frontend.
 - Integracoes com modelos reais devem ficar em Route Handlers no backend.
 - Login/tokens locais sao demo funcional; producao real precisa de banco e sessao segura.
+- Antes de gerar componentes, consultar templates, indice de componentes e contexto RAG local.
+- Prompts de nicho devem incorporar dados do briefing: nome, nicho, cor, WhatsApp e email.
+- Edicoes em linguagem natural devem ser tratadas como intencao especifica quando possivel: texto, cor, imagem, secao, componente, API ou layout.
 - Antes de commitar, rode `npm run lint`, `npm run typecheck` e `npm run build`.

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "status": "seed",
+  "engine": "local-token-vector",
+  "documents": [
+    "AGENTS.md",
+    "DESIGN_SYSTEM.md",
+    "PROJECT_CONTEXT.md",
+    "COMPONENTS.md",
+    "API_PATTERNS.md"
+  ]
+}

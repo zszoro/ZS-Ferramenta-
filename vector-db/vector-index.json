@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "provider": "local-token-vector",
+  "status": "seed",
+  "ignored": ["node_modules", ".next", "dist", "build", "coverage", "logs", "cache"],
+  "documents": [
+    "docs/architecture.md",
+    "AGENTS.md",
+    "DESIGN_SYSTEM.md",
+    "PROJECT_CONTEXT.md",
+    "API_PATTERNS.md",
+    "COMPONENT_INDEX.json",
+    "templates/bakery-site.prompt.md"
+  ]
+}

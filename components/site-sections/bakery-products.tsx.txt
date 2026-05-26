@@ -1,0 +1,21 @@
+const products = [
+  { category: "Paes", name: "Pao frances artesanal", price: "R$ 0,90" },
+  { category: "Salgados", name: "Pao de queijo", price: "R$ 5,90" },
+  { category: "Bolos", name: "Bolo caseiro", price: "R$ 24,90" },
+  { category: "Doces", name: "Sonho de creme", price: "R$ 7,90" },
+  { category: "Bebidas", name: "Cafe coado", price: "R$ 6,90" },
+];
+
+export function BakeryProducts() {
+  return (
+    <section className="grid gap-4 md:grid-cols-3">
+      {products.map((product) => (
+        <article className="rounded-lg bg-white p-5 shadow" key={product.name}>
+          <p className="text-xs font-bold uppercase text-amber-700">{product.category}</p>
+          <h3 className="mt-2 text-xl font-black">{product.name}</h3>
+          <p className="mt-3 font-bold">{product.price}</p>
+        </article>
+      ))}
+    </section>
+  );
+}

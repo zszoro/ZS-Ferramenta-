@@ -1,0 +1,24 @@
+const plans = [
+  { name: "Starter", price: "R$ 29/semana", tokens: 1500 },
+  { name: "Pro", price: "R$ 79/semana", tokens: 6500 },
+  { name: "Scale", price: "R$ 199/semana", tokens: 22000 },
+];
+
+export function PricingModal(props: { onClose: () => void; onChoose: (plan: string) => void }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur">
+      <section className="grid w-full max-w-4xl gap-4 rounded-lg bg-white p-6 shadow-2xl md:grid-cols-3">
+        {plans.map((plan) => (
+          <article className="rounded-lg border p-5" key={plan.name}>
+            <h3 className="text-xl font-black">{plan.name}</h3>
+            <p className="mt-2 text-3xl font-black">{plan.price}</p>
+            <p className="mt-2 text-sm text-zinc-600">{plan.tokens} tokens por semana</p>
+            <button className="mt-5 w-full rounded-lg bg-black p-3 font-bold text-white" onClick={() => props.onChoose(plan.name)} type="button">
+              Escolher
+            </button>
+          </article>
+        ))}
+      </section>
+    </div>
+  );
+}
