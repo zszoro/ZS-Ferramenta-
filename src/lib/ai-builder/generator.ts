@@ -3168,10 +3168,8 @@ function buildPreviewHtml(input: {
     }
     @media (max-width: 1080px) {
       h1 { font-size: 56px; }
-      .media-overlay h2 { font-size: 38px; }
     }
     @media (max-width: 860px) {
-      .hero { grid-template-columns: 1fr; }
       .features { grid-template-columns: 1fr; }
       .product-grid, .testimonial-grid, .promo { grid-template-columns: 1fr; }
       .story { grid-template-columns: 1fr; }
@@ -3180,7 +3178,6 @@ function buildPreviewHtml(input: {
       .timeline p { flex-direction: column; }
       h1 { font-size: 42px; }
       .hero { min-height: auto; padding-top: 26px; }
-      .media-card { min-height: 430px; }
       .story-panel h2 { font-size: 34px; }
     }
   </style>
