@@ -1353,21 +1353,21 @@ export function Header({ site, whatsappHref }: HeaderProps) {
   const brandInitial = site.name.trim().charAt(0).toUpperCase() || "Z";
 
   return (
-    <header className="fixed inset-x-0 top-0 z-40 border-b border-[var(--site-border)] bg-[var(--site-bg)]/90 backdrop-blur-xl">
-      <div className="mx-auto grid h-20 w-[min(1120px,calc(100vw-40px))] grid-cols-[auto_1fr_auto] items-center gap-4">
-        <a className="inline-flex min-w-0 items-center gap-3" href="#inicio" aria-label={site.name}>
-          <span className="grid size-11 shrink-0 place-items-center rounded-full bg-[var(--site-text)] font-serif text-xl font-black text-[var(--site-bg)] shadow-[var(--site-shadow)]">
+    <header className="fixed inset-x-0 top-0 z-40 h-[82px] border-b border-[var(--site-border)] bg-[var(--site-bg)]/85 backdrop-blur-[18px]">
+      <div className="mx-auto grid h-full w-[min(1120px,calc(100vw-40px))] grid-cols-[auto_1fr_auto] items-center gap-6">
+        <a className="inline-flex min-w-[206px] items-center gap-3" href="#inicio" aria-label={site.name}>
+          <span className="grid size-[42px] shrink-0 place-items-center rounded-full bg-[var(--site-text)] font-serif text-[1.35rem] font-black text-[var(--site-bg)] shadow-[0_10px_24px_rgba(59,37,24,0.18)]">
             {brandInitial}
           </span>
-          <span className="grid min-w-0 leading-tight">
-            <strong className="truncate text-base font-black tracking-tight">{site.name}</strong>
-            <small className="truncate text-xs font-semibold text-[var(--site-muted)]">{site.brandTagline}</small>
+          <span className="grid min-w-0 leading-[1.1]">
+            <strong className="truncate text-base font-black tracking-normal">{site.name}</strong>
+            <small className="mt-1 truncate text-xs font-semibold text-[var(--site-muted)]">{site.brandTagline}</small>
           </span>
         </a>
 
-        <nav className="hidden justify-self-center rounded-full border border-[var(--site-border)] bg-white/45 p-1 lg:flex" aria-label="Menu principal">
+        <nav className="hidden justify-self-center rounded-full border border-[var(--site-border)] bg-white/60 p-1 lg:flex" aria-label="Menu principal">
           {site.navigation.map((item) => (
-            <a className="rounded-full px-3 py-2 text-sm font-bold text-[var(--site-muted)] transition hover:bg-[var(--site-primary)]/15 hover:text-[var(--site-text)]" href={item.href} key={item.href}>
+            <a className="rounded-full px-[13px] py-2.5 text-[0.91rem] font-bold text-[var(--site-muted)] transition hover:bg-[var(--site-primary)]/15 hover:text-[var(--site-text)]" href={item.href} key={item.href}>
               {item.label}
             </a>
           ))}
@@ -1375,7 +1375,7 @@ export function Header({ site, whatsappHref }: HeaderProps) {
 
         <div className="flex items-center justify-end gap-2">
           <a
-            className="hidden min-h-11 items-center justify-center rounded-full bg-gradient-to-br from-[var(--site-primary)] to-[var(--site-primary-dark)] px-5 text-sm font-black text-white shadow-[var(--site-shadow)] transition hover:-translate-y-0.5 sm:inline-flex"
+            className="hidden min-h-[46px] items-center justify-center whitespace-nowrap rounded-full bg-gradient-to-br from-[var(--site-primary)] to-[var(--site-primary-dark)] px-[18px] text-[0.94rem] font-black text-white shadow-[0_14px_28px_rgba(184,95,58,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(184,95,58,0.28)] sm:inline-flex"
             href={whatsappHref}
             rel={isExternalWhatsapp ? "noreferrer" : undefined}
             target={isExternalWhatsapp ? "_blank" : undefined}
@@ -1431,20 +1431,32 @@ export function Hero({ site, whatsappHref }: HeroProps) {
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
 
   return (
-    <section className="mx-auto grid min-h-screen w-[min(1120px,calc(100vw-40px))] items-center gap-12 pt-32 pb-20 lg:grid-cols-[0.95fr_1.05fr]" id="inicio">
-      <div className="max-w-2xl">
+    <section
+      className="relative isolate mx-auto mt-[82px] grid min-h-[calc(100vh-82px)] w-full overflow-hidden bg-[var(--site-text)]"
+      id="inicio"
+      style={{
+        backgroundImage:
+          "linear-gradient(90deg, rgba(20, 12, 6, 0.82), rgba(20, 12, 6, 0.48) 48%, rgba(20, 12, 6, 0.12)), url('" +
+          site.images.hero +
+          "')",
+        backgroundPosition: "center",
+        backgroundSize: "cover",
+      }}
+    >
+      <div className="mx-auto flex min-h-[calc(100vh-82px)] w-[min(1120px,calc(100vw-40px))] items-center py-20">
+        <div className="max-w-[680px]">
         <p className="text-sm font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">
           {site.hero.eyebrow}
         </p>
-        <h1 className="mt-4 font-serif text-[clamp(3rem,8vw,5.7rem)] font-black leading-[0.94] tracking-tight text-[var(--site-text)]">
+        <h1 className="mt-4 font-serif text-[clamp(3rem,8vw,5.7rem)] font-black leading-[0.94] tracking-tight text-white">
           {site.hero.title}
         </h1>
-        <p className="mt-6 max-w-xl text-lg leading-8 text-[var(--site-muted)]">
+        <p className="mt-6 max-w-xl text-lg leading-8 text-white/82">
           {site.hero.subtitle}
         </p>
         <div className="mt-9 flex flex-col gap-3 sm:flex-row">
           <a
-            className="inline-flex min-h-12 items-center justify-center rounded-full bg-gradient-to-br from-[var(--site-primary)] to-[var(--site-primary-dark)] px-7 text-sm font-black text-white shadow-[var(--site-shadow)] transition hover:-translate-y-0.5"
+            className="inline-flex min-h-[46px] items-center justify-center rounded-full bg-gradient-to-br from-[var(--site-primary)] to-[var(--site-primary-dark)] px-7 text-sm font-black text-white shadow-[0_14px_28px_rgba(184,95,58,0.28)] transition hover:-translate-y-0.5"
             href={whatsappHref}
             rel={isExternalWhatsapp ? "noreferrer" : undefined}
             target={isExternalWhatsapp ? "_blank" : undefined}
@@ -1452,22 +1464,16 @@ export function Hero({ site, whatsappHref }: HeroProps) {
             {site.hero.primaryCta}
           </a>
           <a
-            className="inline-flex min-h-12 items-center justify-center rounded-full border border-[var(--site-border)] bg-white/70 px-7 text-sm font-black text-[var(--site-text)] transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[var(--site-shadow)]"
+            className="inline-flex min-h-[46px] items-center justify-center rounded-full border border-white/35 bg-white/14 px-7 text-sm font-black text-white backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/22"
             href="#produtos"
           >
             {site.hero.secondaryCta}
           </a>
         </div>
-      </div>
-      <div className="relative overflow-hidden rounded-[2rem] bg-[var(--site-bg-soft)] shadow-[var(--site-shadow)]">
-        <img
-          alt={site.images.heroAlt}
-          className="h-[380px] w-full object-cover sm:h-[560px]"
-          src={site.images.hero}
-        />
-        <div className="absolute right-5 bottom-5 left-5 rounded-[1.25rem] border border-white/60 bg-white/88 p-4 shadow-[var(--site-shadow)] backdrop-blur">
-          <p className="text-sm font-black text-[var(--site-text)]">{site.hero.cardTitle}</p>
-          <p className="mt-1 text-sm text-[var(--site-muted)]">{site.hero.cardText}</p>
+        <div className="mt-8 inline-grid rounded-[1.25rem] border border-white/35 bg-white/16 p-4 text-white shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur">
+          <p className="text-sm font-black">{site.hero.cardTitle}</p>
+          <p className="mt-1 text-sm text-white/75">{site.hero.cardText}</p>
+        </div>
         </div>
       </div>
     </section>
@@ -2723,38 +2729,6 @@ function buildPreviewHtml(input: {
   const mapBlock = isBakery
     ? `<div class="map-placeholder">Mapa da regiao<br><span>Espaco pronto para incorporar Google Maps ou mapa estatico.</span></div>`
     : "";
-  const dashboardSurface = `
-      <section class="product dashboard-panel" aria-label="Preview do produto">
-        <div class="toolbar">
-          <span>Hoje</span><span>Clientes</span><span>Automacoes</span>
-        </div>
-        <div class="metrics">
-          <div><strong>R$ 48k</strong><span>pipeline</span></div>
-          <div><strong>312</strong><span>clientes</span></div>
-          <div><strong>91%</strong><span>saude</span></div>
-        </div>
-        <div class="timeline">
-          <p><b>Plano Pro</b><span>checkout pronto</span></p>
-          <p><b>CRM integrado</b><span>12 tarefas abertas</span></p>
-          <p><b>IA ativa</b><span>gerando melhorias</span></p>
-        </div>
-      </section>`;
-
-  const productSurface = isDashboard
-    ? dashboardSurface
-    : `
-      <section class="product media-card" aria-label="Preview do site">
-        <img src="${media.secondary}" alt="${escapeHtml(media.secondaryAlt)}" referrerpolicy="no-referrer" />
-        <div class="media-overlay">
-          <p>${escapeHtml(profile.kicker)}</p>
-          <h2>${escapeHtml(profile.cardTitle)}</h2>
-        </div>
-        <div class="floating-proof">
-          <strong>${escapeHtml(profile.proofPoints[0] ?? "Atendimento")}</strong>
-          <span>${escapeHtml(buildPreviewProofText(input.industry))}</span>
-        </div>
-      </section>`;
-
   return `<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -2789,80 +2763,127 @@ function buildPreviewHtml(input: {
     }
     .page {
       min-height: 100vh;
-      width: min(1180px, calc(100% - 32px));
-      margin: 0 auto;
-      padding: 22px 0 32px;
-    }
-    header, footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
+      width: 100%;
+      margin: 0;
+      padding: 0 0 32px;
     }
     header {
-      position: sticky;
-      top: 12px;
-      z-index: 5;
-      min-height: 62px;
-      padding: 12px 14px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--header);
-      backdrop-filter: blur(16px);
-      box-shadow: 0 12px 36px rgba(0, 0, 0, .08);
+      position: fixed;
+      inset: 0 0 auto;
+      z-index: 20;
+      height: 82px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 24px;
+      padding: 0 max(24px, calc((100vw - 1120px) / 2));
+      background: color-mix(in srgb, var(--bg) 86%, white 14%);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(18px);
+      transition: box-shadow 180ms ease, background 180ms ease;
     }
     .brand {
       display: inline-flex;
       align-items: center;
-      gap: 10px;
-      font-weight: 900;
-      letter-spacing: 0;
-      color: var(--text);
+      gap: 12px;
+      min-width: 206px;
+      text-decoration: none;
     }
-    .brand::before {
-      content: "";
-      width: 12px;
-      height: 12px;
-      border-radius: 3px;
-      background: var(--accent);
-      box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 48%, transparent);
+    .brand__mark {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--text);
+      color: var(--bg);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.35rem;
+      font-weight: 800;
+      box-shadow: 0 10px 24px rgba(59, 37, 24, 0.18);
+    }
+    .brand__text {
+      display: grid;
+      line-height: 1.1;
+    }
+    .brand__text strong {
+      font-size: 1rem;
+      letter-spacing: 0;
+    }
+    .brand__text small {
+      color: var(--muted);
+      font-size: 0.76rem;
+      margin-top: 3px;
     }
     nav {
+      justify-self: center;
       display: flex;
-      gap: 18px;
-      font-size: 13px;
-      font-weight: 700;
+      align-items: center;
+      gap: 4px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--surface) 58%, white 42%);
     }
     nav a {
       color: var(--muted);
       text-decoration: none;
+      border-radius: 999px;
+      font-size: .91rem;
+      font-weight: 700;
+      padding: 10px 13px;
+      transition: color 180ms ease, background 180ms ease;
+    }
+    nav a:hover {
+      color: var(--text);
+      background: color-mix(in srgb, var(--accent) 18%, transparent);
     }
     .nav-cta {
-      color: #080808;
-      background: var(--accent);
+      display: inline-flex;
+      min-height: 46px;
+      align-items: center;
+      justify-content: center;
+      color: #fffdf8;
+      background: linear-gradient(135deg, var(--accent), var(--accent-soft));
       border-radius: 999px;
-      padding: 9px 13px;
-      font-size: 12px;
-      font-weight: 900;
+      padding: 0 18px;
+      font-size: .94rem;
+      font-weight: 800;
       text-decoration: none;
+      white-space: nowrap;
+      box-shadow: 0 14px 28px color-mix(in srgb, var(--accent) 22%, transparent);
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+    .nav-cta:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 18px 34px color-mix(in srgb, var(--accent) 28%, transparent);
     }
     .hero {
+      position: relative;
+      isolation: isolate;
+      overflow: hidden;
       display: grid;
-      grid-template-columns: minmax(0, .92fr) minmax(340px, 1.08fr);
       align-items: center;
-      gap: 48px;
-      min-height: calc(100vh - 120px);
-      padding: 42px 0 34px;
+      min-height: 100vh;
+      padding: 132px max(24px, calc((100vw - 1120px) / 2)) 78px;
+      background:
+        linear-gradient(90deg, rgba(27, 17, 9, .86), rgba(27, 17, 9, .52) 48%, rgba(27, 17, 9, .08)),
+        url("${media.hero}") center / cover;
+    }
+    .hero > div {
+      position: relative;
+      z-index: 1;
+      max-width: 680px;
     }
     h1 {
       margin: 0;
-      max-width: 820px;
+      max-width: 760px;
       font-family: Georgia, "Times New Roman", serif;
       font-size: 70px;
       line-height: .96;
       letter-spacing: 0;
       font-weight: 700;
-      color: var(--heading);
+      color: #fffdf8;
     }
     h1::selection, p::selection, strong::selection, span::selection {
       background: var(--accent);
@@ -2875,17 +2896,18 @@ function buildPreviewHtml(input: {
       margin-top: 18px;
     }
     .proof span {
-      border: 1px solid var(--line);
+      border: 1px solid rgba(255,255,255,.28);
       border-radius: 999px;
-      background: var(--surface);
+      background: rgba(255,255,255,.12);
       padding: 9px 12px;
-      color: var(--text);
+      color: #fffdf8;
       font-size: 12px;
       font-weight: 800;
+      backdrop-filter: blur(8px);
     }
     .lead {
       max-width: 620px;
-      color: var(--muted);
+      color: rgba(255,253,248,.82);
       font-size: 19px;
       line-height: 1.65;
       margin: 24px 0;
@@ -2907,14 +2929,15 @@ function buildPreviewHtml(input: {
       min-height: 46px;
     }
     .primary {
-      background: var(--accent);
-      color: #080808;
+      background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+      color: #fffdf8;
       box-shadow: 0 18px 54px color-mix(in srgb, var(--accent) 26%, transparent);
     }
     .secondary {
-      border: 1px solid var(--line);
-      color: var(--text);
-      background: var(--surface);
+      border: 1px solid rgba(255,255,255,.32);
+      color: #fffdf8;
+      background: rgba(255,255,255,.12);
+      backdrop-filter: blur(8px);
     }
     .product {
       border: 1px solid var(--line);
@@ -3240,7 +3263,13 @@ function buildPreviewHtml(input: {
 <body>
   <main class="page">
     <header>
-      <div class="brand">${escapedName}</div>
+      <a class="brand" href="#inicio" aria-label="${escapedName}">
+        <span class="brand__mark" aria-hidden="true">${escapedName.charAt(0).toUpperCase()}</span>
+        <span class="brand__text">
+          <strong>${escapedName}</strong>
+          <small>${escapeHtml(profile.kicker)}</small>
+        </span>
+      </a>
       <nav>${navItems}</nav>
       ${contact.primary ? `<a class="nav-cta" href="${contact.primaryHref}">${contact.primary}</a>` : ""}
     </header>
@@ -3256,7 +3285,6 @@ function buildPreviewHtml(input: {
           ${profile.proofPoints.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
         </div>
       </div>
-      ${productSurface}
     </section>
     <section id="${isBakery ? "sobre" : "servicos"}" class="features">${featureCards}</section>
     ${bakerySections}
@@ -3311,15 +3339,6 @@ function buildPreviewHighlights(industry: string) {
     { title: "Agenda funcional", text: "Fluxo de horários, status e confirmação de atendimentos." },
     { title: "Gestão interna", text: "Painel preparado para produtos, clientes e relatórios." },
   ];
-}
-
-function buildPreviewProofText(industry: string) {
-  const normalized = normalize(industry);
-  if (normalized.includes("barbearia")) return "Serviços, horários e contato em um fluxo direto.";
-  if (normalized.includes("padaria")) return "Produtos, pedidos e funcionamento em uma página clara.";
-  if (normalized.includes("oficina") || normalized.includes("mecanica")) return "Revisões, peças e orçamentos organizados.";
-  if (normalized.includes("restaurante")) return "Cardápio, reservas e contato prontos para conversão.";
-  return "Conteúdo, contato e operação conectados.";
 }
 
 function buildBakerySections(name: string, contact: ReturnType<typeof buildContact>) {
