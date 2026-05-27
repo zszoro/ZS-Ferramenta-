@@ -50,6 +50,12 @@ type ChatMessage = {
   files?: BuilderProject["files"];
 };
 
+type PreviewSelection = {
+  tag: string;
+  label: string;
+  selector: string;
+};
+
 type AccountSettings = {
   language: "pt-BR" | "en-US";
   defaultPreview: "desktop" | "mobile";
@@ -119,7 +125,7 @@ const plans: Plan[] = [
     price: "R$ 29/semana",
     weeklyTokens: 1500,
     description: "Para criar sites simples e testar ideias rapido.",
-    benefits: ["1.500 tokens por semana", "Preview ao vivo", "Exportacao HTML", "Edicoes no chat"],
+    benefits: ["1.500 tokens por semana", "Preview ao vivo", "Download ZIP", "Edicoes no chat"],
   },
   {
     id: "pro",
@@ -195,6 +201,7 @@ export function AiBuilderApp() {
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
   const [createdPanelOpen, setCreatedPanelOpen] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [selectedPreviewElement, setSelectedPreviewElement] = useState<PreviewSelection | null>(null);
 
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [tokensModalOpen, setTokensModalOpen] = useState(false);
@@ -208,6 +215,7 @@ export function AiBuilderApp() {
     () => project?.previewHtml ?? emptyPreview(account?.name ?? "zs"),
     [account?.name, project],
   );
+  const inspectablePreviewHtml = useMemo(() => withPreviewInspector(previewHtml), [previewHtml]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -235,6 +243,26 @@ export function AiBuilderApp() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, isSending]);
+
+  useEffect(() => {
+    function onPreviewMessage(event: MessageEvent) {
+      const data = event.data as Partial<PreviewSelection> & { type?: string };
+
+      if (data?.type !== "zs-preview-select" || !data.label || !data.selector || !data.tag) {
+        return;
+      }
+
+      setSelectedPreviewElement({
+        tag: data.tag,
+        label: data.label,
+        selector: data.selector,
+      });
+    }
+
+    window.addEventListener("message", onPreviewMessage);
+
+    return () => window.removeEventListener("message", onPreviewMessage);
+  }, []);
 
   useEffect(() => {
     if (!isResizing) return;
@@ -305,6 +333,12 @@ export function AiBuilderApp() {
       role: "user",
       text: message,
     };
+    const messageForAi = selectedPreviewElement
+      ? [
+          `Elemento selecionado no preview: ${selectedPreviewElement.tag} "${selectedPreviewElement.label}" (${selectedPreviewElement.selector}).`,
+          `Pedido do usuario: ${message}`,
+        ].join("\n")
+      : message;
 
     setInput("");
     setChatError(null);
@@ -315,7 +349,7 @@ export function AiBuilderApp() {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, project }),
+        body: JSON.stringify({ message: messageForAi, project }),
       });
       const payload = (await response.json()) as
         | ({ ok: true } & BuilderAssistantResponse)
@@ -333,6 +367,7 @@ export function AiBuilderApp() {
         setProject(payload.project);
         setCreatedPanelOpen(true);
       }
+      setSelectedPreviewElement(null);
 
       setMessages((current) => [
         ...current,
@@ -466,14 +501,24 @@ export function AiBuilderApp() {
     }
   }
 
-  function exportHtml() {
+  function exportZip() {
     if (!project) return;
 
-    const blob = new Blob([project.previewHtml], { type: "text/html" });
+    const files = [
+      ...project.files.map((file) => ({
+        path: file.path,
+        content: file.content,
+      })),
+      {
+        path: "preview.html",
+        content: project.previewHtml,
+      },
+    ];
+    const blob = createZipBlob(files);
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${slugify(project.name)}.html`;
+    link.download = `${slugify(project.name)}.zip`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -530,10 +575,11 @@ export function AiBuilderApp() {
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#050705] text-zinc-100">
-      <div className="flex min-h-screen flex-col lg:flex-row">
-        <section className="relative flex min-h-screen min-w-0 flex-1 flex-col bg-[#070907]">
-          <header className="flex items-center justify-between border-b border-white/10 px-4 py-3 md:px-6">
+    <main className="h-screen overflow-hidden bg-[#050705] text-zinc-100">
+      <div className="flex h-screen overflow-hidden flex-col lg:flex-row">
+        <section className="relative flex h-screen min-w-0 flex-1 flex-col overflow-hidden bg-[#070907]">
+          <header className="shrink-0 border-b border-white/10 px-4 py-3 md:px-6">
+            <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="grid h-10 w-10 place-items-center rounded-lg bg-[#7cff6b] text-sm font-black text-black shadow-[0_0_30px_rgba(124,255,107,0.4)]">
                 ZS
@@ -570,9 +616,10 @@ export function AiBuilderApp() {
                 {account?.tokens.remaining ?? 0}
               </button>
             </div>
+            </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto px-4 py-5 pb-36 md:px-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
             <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
               {messages.map((message) => (
                 <ChatBubble key={message.id} message={message} compact={account?.settings.compactChat ?? false} />
@@ -597,8 +644,8 @@ export function AiBuilderApp() {
             </div>
           </div>
 
-          <div className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-[#070907]/95 px-4 py-4 backdrop-blur md:px-6">
-            <div className="mx-auto w-full max-w-4xl lg:pl-40">
+          <div className="shrink-0 border-t border-white/10 bg-[#070907]/95 px-4 py-4 backdrop-blur md:px-6">
+            <div className="mx-auto w-full max-w-4xl">
               <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
                 {quickPrompts.map((prompt) => (
                   <button
@@ -612,6 +659,22 @@ export function AiBuilderApp() {
                 ))}
               </div>
 
+              {selectedPreviewElement && (
+                <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-[#7cff6b]/30 bg-[#7cff6b]/10 px-3 py-2 text-xs text-zinc-200">
+                  <span className="min-w-0 truncate">
+                    Selecionado no preview: <strong className="text-[#d8ff76]">{selectedPreviewElement.tag}</strong> - {selectedPreviewElement.label}
+                  </span>
+                  <button
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white"
+                    onClick={() => setSelectedPreviewElement(null)}
+                    type="button"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                    <span className="sr-only">Limpar seleção</span>
+                  </button>
+                </div>
+              )}
+
               <form className="grid grid-cols-[1fr_auto] gap-2" onSubmit={handleSend}>
                 <label className="block">
                   <span className="sr-only">Mensagem para IA</span>
@@ -624,7 +687,11 @@ export function AiBuilderApp() {
                         void handleSend();
                       }
                     }}
-                    placeholder="Peça para criar ou editar. Ex.: troque aquele titulo ZS por Barbearia Elite..."
+                    placeholder={
+                      selectedPreviewElement
+                        ? "Diga o que mudar no item selecionado..."
+                        : "Peça para criar ou editar. Ex.: troque o título por Barbearia Elite..."
+                    }
                     value={input}
                   />
                 </label>
@@ -659,7 +726,7 @@ export function AiBuilderApp() {
         </section>
 
         <aside
-          className="relative flex min-h-[520px] w-full shrink-0 flex-col border-l border-white/10 bg-[#0b0f0b] lg:min-h-screen lg:w-[var(--preview-width)]"
+          className="relative flex h-screen w-full shrink-0 flex-col overflow-hidden border-l border-white/10 bg-[#0b0f0b] lg:w-[var(--preview-width)]"
           style={{ "--preview-width": `${previewWidth}vw` } as CSSProperties}
         >
           <button
@@ -680,11 +747,11 @@ export function AiBuilderApp() {
 
           <PreviewPanel
             copied={copied}
-            html={previewHtml}
+            html={inspectablePreviewHtml}
             mode={previewMode}
             project={project}
             onCopy={copyHtml}
-            onExport={exportHtml}
+            onExport={exportZip}
             onFullscreen={() => setIsPreviewFullscreen(true)}
             onModeChange={setPreviewMode}
           />
@@ -697,7 +764,7 @@ export function AiBuilderApp() {
 
       {isPreviewFullscreen && (
         <FullscreenPreview
-          html={previewHtml}
+          html={inspectablePreviewHtml}
           mode={previewMode}
           project={project}
           onClose={() => setIsPreviewFullscreen(false)}
@@ -1258,7 +1325,7 @@ function PreviewPanel(props: {
             className="grid h-9 w-9 place-items-center rounded-md border border-white/10 text-zinc-300 transition hover:border-[#7cff6b]/50 hover:text-white disabled:opacity-40"
             disabled={!props.project}
             onClick={props.onExport}
-            title="Exportar HTML"
+            title="Baixar ZIP"
             type="button"
           >
             <ArrowDownToLine className="h-4 w-4" aria-hidden="true" />
@@ -1274,12 +1341,12 @@ function PreviewPanel(props: {
         </div>
       </header>
 
-      <div className="flex flex-1 items-start justify-center overflow-auto bg-[#111811] p-4">
+      <div className="min-h-0 flex-1 overflow-hidden bg-[#111811] p-4">
         <iframe
-          className={`min-h-[680px] rounded-xl border border-white/10 bg-white shadow-2xl transition-all ${
-            props.mode === "mobile" ? "w-[390px]" : "w-full"
+          className={`mx-auto h-full rounded-xl border border-white/10 bg-white shadow-2xl transition-all ${
+            props.mode === "mobile" ? "w-[390px] max-w-full" : "w-full"
           }`}
-          sandbox=""
+          sandbox="allow-scripts"
           srcDoc={props.html}
           title="Preview gerado pela IA"
         />
@@ -1302,14 +1369,16 @@ function CreatedFloatingPanel(props: { project: BuilderProject; onClose: () => v
       <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7cff6b]">O que foi criado</p>
       <h3 className="mt-2 pr-8 text-lg font-black tracking-[-0.03em]">{props.project.name}</h3>
       <p className="mt-2 text-sm leading-6 text-zinc-400">{props.project.summary}</p>
-      <ul className="mt-4 grid gap-2">
-        {props.project.features.slice(0, 5).map((feature) => (
-          <li key={feature} className="flex gap-2 text-sm text-zinc-200">
-            <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#7cff6b]" aria-hidden="true" />
-            {feature}
-          </li>
-        ))}
-      </ul>
+      <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+        <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+          <strong className="block text-white">{props.project.files.length}</strong>
+          <span className="text-xs text-zinc-500">arquivos</span>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+          <strong className="block text-white">Preview</strong>
+          <span className="text-xs text-zinc-500">selecionável</span>
+        </div>
+      </div>
     </aside>
   );
 }
@@ -1336,12 +1405,12 @@ function FullscreenPreview(props: {
           <span className="sr-only">Sair da tela cheia</span>
         </button>
       </header>
-      <div className="flex flex-1 items-start justify-center overflow-auto bg-[#111811] p-5">
+      <div className="min-h-0 flex-1 overflow-hidden bg-[#111811] p-5">
         <iframe
-          className={`min-h-full rounded-xl border border-white/10 bg-white shadow-2xl ${
-            props.mode === "mobile" ? "w-[390px]" : "w-full"
+          className={`mx-auto h-full rounded-xl border border-white/10 bg-white shadow-2xl ${
+            props.mode === "mobile" ? "w-[390px] max-w-full" : "w-full"
           }`}
-          sandbox=""
+          sandbox="allow-scripts"
           srcDoc={props.html}
           title="Preview em tela cheia"
         />
@@ -1912,6 +1981,162 @@ function copyWithTextarea(value: string) {
   textarea.select();
   document.execCommand("copy");
   textarea.remove();
+}
+
+function withPreviewInspector(html: string) {
+  const inspector = `<script>
+(() => {
+  let selectedElement = null;
+
+  function textFor(element) {
+    if (element instanceof HTMLImageElement) return element.alt || element.src || "imagem";
+    return (element.innerText || element.getAttribute("aria-label") || element.id || element.className || element.tagName).toString().trim().replace(/\\s+/g, " ");
+  }
+
+  function selectorFor(element) {
+    if (element.id) return "#" + element.id;
+    const parts = [];
+    let current = element;
+    while (current && current.nodeType === 1 && current !== document.body && parts.length < 4) {
+      const tag = current.tagName.toLowerCase();
+      const index = Array.from(current.parentElement ? current.parentElement.children : []).indexOf(current) + 1;
+      parts.unshift(tag + ":nth-child(" + index + ")");
+      current = current.parentElement;
+    }
+    return parts.join(" > ") || element.tagName.toLowerCase();
+  }
+
+  document.addEventListener("click", (event) => {
+    const source = event.target;
+    const target = source instanceof Element ? source.closest("a,button,h1,h2,h3,h4,p,img,section,article,header,footer,nav,li,span,div") : null;
+    if (!target) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (selectedElement) {
+      selectedElement.style.outline = "";
+      selectedElement.style.outlineOffset = "";
+    }
+
+    selectedElement = target;
+    selectedElement.style.outline = "3px solid #7cff6b";
+    selectedElement.style.outlineOffset = "3px";
+
+    window.parent.postMessage({
+      type: "zs-preview-select",
+      tag: target.tagName.toLowerCase(),
+      label: textFor(target).slice(0, 140),
+      selector: selectorFor(target),
+    }, "*");
+  }, true);
+})();
+</script>`;
+
+  if (/<\/body>/i.test(html)) {
+    return html.replace(/<\/body>/i, `${inspector}</body>`);
+  }
+
+  return `${html}${inspector}`;
+}
+
+function createZipBlob(files: Array<{ path: string; content: string }>) {
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  const centralDirectory: Uint8Array[] = [];
+  let offset = 0;
+
+  for (const file of files) {
+    const normalizedPath = file.path.replace(/\\/g, "/");
+    const nameBytes = encoder.encode(normalizedPath);
+    const data = encoder.encode(file.content);
+    const crc = crc32(data);
+    const localHeader = new Uint8Array(30 + nameBytes.length);
+
+    writeUint32(localHeader, 0, 0x04034b50);
+    writeUint16(localHeader, 4, 20);
+    writeUint16(localHeader, 6, 0);
+    writeUint16(localHeader, 8, 0);
+    writeUint16(localHeader, 10, 0);
+    writeUint16(localHeader, 12, 0);
+    writeUint32(localHeader, 14, crc);
+    writeUint32(localHeader, 18, data.length);
+    writeUint32(localHeader, 22, data.length);
+    writeUint16(localHeader, 26, nameBytes.length);
+    writeUint16(localHeader, 28, 0);
+    localHeader.set(nameBytes, 30);
+
+    chunks.push(localHeader, data);
+
+    const centralHeader = new Uint8Array(46 + nameBytes.length);
+    writeUint32(centralHeader, 0, 0x02014b50);
+    writeUint16(centralHeader, 4, 20);
+    writeUint16(centralHeader, 6, 20);
+    writeUint16(centralHeader, 8, 0);
+    writeUint16(centralHeader, 10, 0);
+    writeUint16(centralHeader, 12, 0);
+    writeUint16(centralHeader, 14, 0);
+    writeUint32(centralHeader, 16, crc);
+    writeUint32(centralHeader, 20, data.length);
+    writeUint32(centralHeader, 24, data.length);
+    writeUint16(centralHeader, 28, nameBytes.length);
+    writeUint16(centralHeader, 30, 0);
+    writeUint16(centralHeader, 32, 0);
+    writeUint16(centralHeader, 34, 0);
+    writeUint16(centralHeader, 36, 0);
+    writeUint32(centralHeader, 38, 0);
+    writeUint32(centralHeader, 42, offset);
+    centralHeader.set(nameBytes, 46);
+    centralDirectory.push(centralHeader);
+
+    offset += localHeader.length + data.length;
+  }
+
+  const centralStart = offset;
+  const centralSize = centralDirectory.reduce((size, item) => size + item.length, 0);
+  const end = new Uint8Array(22);
+  writeUint32(end, 0, 0x06054b50);
+  writeUint16(end, 8, files.length);
+  writeUint16(end, 10, files.length);
+  writeUint32(end, 12, centralSize);
+  writeUint32(end, 16, centralStart);
+
+  return new Blob(
+    [...chunks, ...centralDirectory, end].map((chunk) => {
+      const copy = new Uint8Array(chunk.byteLength);
+      copy.set(chunk);
+      return copy.buffer;
+    }),
+    { type: "application/zip" },
+  );
+}
+
+function writeUint16(target: Uint8Array, offset: number, value: number) {
+  target[offset] = value & 0xff;
+  target[offset + 1] = (value >>> 8) & 0xff;
+}
+
+function writeUint32(target: Uint8Array, offset: number, value: number) {
+  target[offset] = value & 0xff;
+  target[offset + 1] = (value >>> 8) & 0xff;
+  target[offset + 2] = (value >>> 16) & 0xff;
+  target[offset + 3] = (value >>> 24) & 0xff;
+}
+
+const crcTable = Array.from({ length: 256 }, (_, index) => {
+  let value = index;
+  for (let bit = 0; bit < 8; bit += 1) {
+    value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  }
+  return value >>> 0;
+});
+
+function crc32(data: Uint8Array) {
+  let crc = 0xffffffff;
+  for (const byte of data) {
+    crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
 }
 
 function emptyPreview(name: string) {

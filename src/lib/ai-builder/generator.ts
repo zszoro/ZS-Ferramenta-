@@ -134,9 +134,9 @@ export function respondToBuilderMessage(input: {
       mode: "create",
       project,
       reply: [
-        `Criei um projeto para ${project.name} usando o briefing inicial.`,
+        `Criei ${project.name} com o modelo visual principal.`,
         project.summary,
-        "Usei nicho, cor principal e contato para montar uma primeira versao mais parecida com um site real, com imagens gratuitas no preview.",
+        "O projeto ja inclui estrutura de site, area logada, rotas de backend, banco, vendas, estoque e agendamentos.",
       ].join("\n\n"),
       suggestions: [
         "Adicione depoimentos de clientes reais.",
@@ -154,9 +154,9 @@ export function respondToBuilderMessage(input: {
       mode: "edit",
       project,
       reply: [
-        `Atualizei o projeto ${project.name} no preview.`,
-        "Eu tratei seu pedido como edicao do site atual, mantive a estrutura anterior e regenerei os arquivos sugeridos.",
-        `Alteracoes aplicadas: ${project.features.slice(0, 4).join(", ")}.`,
+        `Atualizei ${project.name}.`,
+        project.summary,
+        "O preview, os componentes e os arquivos do projeto foram atualizados com essa mudanca.",
       ].join("\n\n"),
       suggestions: [
         "Crie uma area de agendamento com horarios.",
@@ -174,9 +174,9 @@ export function respondToBuilderMessage(input: {
       mode: "create",
       project,
       reply: [
-        `Criei uma primeira versao de ${project.name} com preview ao vivo.`,
+        `Criei ${project.name}.`,
         project.summary,
-        "Tambem deixei uma estrutura de arquivos para evoluir o projeto para codigo real, com componentes, rotas e configuracoes funcionais.",
+        "A estrutura gerada ja vem com componentes, rotas, banco, autenticacao, vendas, estoque e agendamento para evoluir como projeto real.",
       ].join("\n\n"),
       suggestions: [
         "Troque o titulo principal por outro nome.",
@@ -217,7 +217,7 @@ export function buildProjectFromBrief(brief: ProjectBrief): BuilderProject {
     projectName,
     brief: cleanBrief,
   })}`;
-  const summary = `${cleanBrief.companyName} e um site profissional para ${industry}, com imagem real do nicho, CTA de contato, prova social, servicos e uma primeira estrutura pronta para publicar.`;
+  const summary = `${cleanBrief.companyName} agora tem uma base completa para ${industry}, com site responsivo, area logada, vendas, estoque, agendamento e painel administrativo.`;
 
   return {
     id: createId(prompt),
@@ -231,9 +231,9 @@ export function buildProjectFromBrief(brief: ProjectBrief): BuilderProject {
     steps: [
       "Briefing estruturado recebido.",
       "Nicho, contato e cor principal aplicados.",
-      "Imagens gratuitas do nicho selecionadas para o preview.",
-      "Secoes de servicos, prova social e CTA montadas.",
-      "Arquivos sugeridos preparados para evoluir o projeto.",
+      "Conteudo, tema e imagens adaptados ao nicho.",
+      "Area logada, vendas, estoque e agendamento preparados.",
+      "Arquivos organizados para download em ZIP.",
     ],
     features,
     files: buildFiles(cleanBrief.companyName, "site", features, augmentedPrompt, cleanBrief),
@@ -276,7 +276,7 @@ export function buildProjectFromPrompt(prompt: string): BuilderProject {
   const summary =
     kind === "saas" || kind === "dashboard"
       ? `${name} e um sistema com onboarding, painel, metricas, entidades de negocio e caminhos preparados para autenticacao, banco e pagamento.`
-      : `${name} e um site responsivo com hero forte, secoes de valor, prova social, CTA e estrutura pronta para virar codigo publicado.`;
+      : `${name} e um projeto completo com site responsivo, backend, area logada, vendas, estoque, agendamento e painel administrativo.`;
 
   return {
     id: createId(cleanPrompt),
@@ -308,6 +308,10 @@ export function buildProjectFromPrompt(prompt: string): BuilderProject {
 function editProjectFromPrompt(project: BuilderProject, prompt: string): BuilderProject {
   const now = new Date().toISOString();
   const changes: string[] = [];
+  const intent = latestPromptIntent(prompt);
+  const selectedElement = extractSelectedElement(prompt);
+  const descriptionOverride = extractDescriptionOverride(intent);
+  const imageTarget = extractImageTarget(intent);
   const requestedName = extractRequestedName(prompt);
   const requestedKind = extractRequestedKind(prompt);
   const requestedPalette = pickEditPalette(prompt) ?? getPalette(project.paletteName);
@@ -326,17 +330,29 @@ function editProjectFromPrompt(project: BuilderProject, prompt: string): Builder
     changes.push(`paleta alterada para ${requestedPalette.name}`);
   }
 
+  if (descriptionOverride) {
+    changes.push("descricao principal atualizada");
+  }
+
+  if (imageTarget) {
+    changes.push(`imagem de ${imageTarget} atualizada`);
+  }
+
+  if (selectedElement) {
+    changes.push(`item selecionado ajustado: ${selectedElement}`);
+  }
+
   const kind = requestedKind ?? project.kind;
   if (kind !== project.kind) {
     changes.push(`tipo ajustado para ${kind}`);
   }
 
   if (changes.length === 0) {
-    changes.push("pedido aplicado como refinamento de conteudo e estrutura");
+    changes.push("conteudo e layout ajustados conforme o pedido");
   }
 
   const nextPrompt = `${project.prompt}\nEdicao ${project.editCount + 1}: ${prompt}`;
-  const summary = `${name} foi atualizado com ${changes.join(", ")}. O preview e os arquivos foram regenerados preservando a base do projeto.`;
+  const summary = `Mudancas aplicadas: ${changes.join(", ")}. Mantive o modelo visual, atualizei o conteudo solicitado e regenerei os arquivos do projeto.`;
 
   return {
     ...project,
@@ -601,7 +617,7 @@ function buildFeatures(
     kind === "dashboard"
       ? ["Metricas em tempo real", "Tabela de clientes", "Filtros rapidos", "Alertas operacionais"]
       : kind === "site" || kind === "landing"
-        ? ["Hero de conversao", "Secoes responsivas", "Prova social", "CTA para WhatsApp"]
+        ? ["Cabecalho do modelo", "Conteudo por nicho", "Area logada", "Vendas e agenda"]
         : ["Onboarding guiado", "Dashboard de uso", "Planos e cobranca", "Area administrativa"];
 
   if (lower.includes("login") || lower.includes("autenticacao")) base.push("Autenticacao");
@@ -614,7 +630,7 @@ function buildFeatures(
   if (industry === "padarias") {
     base.push("Catalogo de produtos", "Combo promocional", "Depoimentos", "Contato com mapa");
   }
-  if (industry !== "negocios digitais") base.push(`Copy adaptada para ${industry}`);
+  if (industry !== "negocios digitais") base.push(`Experiencia completa para ${industry}`);
 
   return unique(base).slice(0, 8);
 }
@@ -637,6 +653,7 @@ function buildFiles(
 
   const files: BuilderFile[] = buildGeneratedNextFiles(name, kind, features, prompt, brief);
 
+  files.push(...buildGeneratedBackendFiles(slug, name, prompt, brief));
   files.push(...getReusableTemplateFiles(slug));
 
   if (wantsDashboard) {
@@ -669,11 +686,515 @@ function buildFiles(
   files.push({
     path: "prisma/schema.prisma",
     language: "prisma",
-    description: "Modelo inicial para persistir usuarios, projetos, tokens e assinaturas.",
-    content: `model User {\n  id        String   @id @default(cuid())\n  email     String   @unique\n  name      String\n  tokens    Int      @default(500)\n  createdAt DateTime @default(now())\n}\n\nmodel Project {\n  id        String   @id @default(cuid())\n  ownerId   String\n  name      String\n  prompt    String\n  html      String\n  createdAt DateTime @default(now())\n}`,
+    description: "Schema Prisma completo para usuarios, sessoes, produtos, estoque, pedidos e agendamentos.",
+    content: buildGeneratedPrismaSchema(),
   });
 
   return files;
+}
+
+function buildGeneratedBackendFiles(
+  slug: string,
+  name: string,
+  prompt: string,
+  brief?: ProjectBrief,
+): BuilderFile[] {
+  const industry = detectIndustry(brief?.niche?.trim() || latestPromptIntent(prompt));
+  const hasCommerce = shouldIncludeCommerce(industry);
+  const hasScheduling = shouldIncludeScheduling(industry);
+
+  return [
+    {
+      path: "package.json",
+      language: "json",
+      description: "Dependencias para rodar o projeto Next.js completo com Prisma.",
+      content: JSON.stringify(
+        {
+          scripts: {
+            dev: "next dev",
+            build: "next build",
+            start: "next start",
+            "db:push": "prisma db push",
+            "db:studio": "prisma studio",
+          },
+          dependencies: {
+            "@prisma/client": "latest",
+            bcryptjs: "latest",
+            next: "latest",
+            prisma: "latest",
+            react: "latest",
+            "react-dom": "latest",
+            zod: "latest",
+          },
+          devDependencies: {
+            "@tailwindcss/postcss": "latest",
+            "@types/bcryptjs": "latest",
+            "@types/node": "latest",
+            "@types/react": "latest",
+            "@types/react-dom": "latest",
+            tailwindcss: "latest",
+            typescript: "latest",
+          },
+        },
+        null,
+        2,
+      ),
+    },
+    {
+      path: ".env.example",
+      language: "env",
+      description: "Variaveis necessarias para banco, sessao e pagamentos.",
+      content: `DATABASE_URL="postgresql://user:password@localhost:5432/${slug}"
+AUTH_SECRET="troque-por-um-segredo-forte"
+MERCADO_PAGO_ACCESS_TOKEN=""
+NEXT_PUBLIC_SITE_NAME="${name}"
+`,
+    },
+    {
+      path: "src/app/layout.tsx",
+      language: "tsx",
+      description: "Layout raiz do projeto gerado.",
+      content: `import type { ReactNode } from "react";
+import "./globals.css";
+
+export const metadata = {
+  title: process.env.NEXT_PUBLIC_SITE_NAME ?? "${name}",
+  description: "Projeto completo com site, login, vendas, estoque e agendamentos.",
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="pt-BR">
+      <body>{children}</body>
+    </html>
+  );
+}
+`,
+    },
+    {
+      path: "src/app/globals.css",
+      language: "css",
+      description: "CSS global com Tailwind.",
+      content: `@import "tailwindcss";
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+}
+`,
+    },
+    {
+      path: "postcss.config.mjs",
+      language: "js",
+      description: "Configuração PostCSS para Tailwind CSS 4.",
+      content: `const config = {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+};
+
+export default config;
+`,
+    },
+    {
+      path: "tsconfig.json",
+      language: "json",
+      description: "Configuração TypeScript para Next.js.",
+      content: JSON.stringify(
+        {
+          compilerOptions: {
+            target: "ES2017",
+            lib: ["dom", "dom.iterable", "esnext"],
+            allowJs: true,
+            skipLibCheck: true,
+            strict: true,
+            noEmit: true,
+            esModuleInterop: true,
+            module: "esnext",
+            moduleResolution: "bundler",
+            resolveJsonModule: true,
+            isolatedModules: true,
+            jsx: "react-jsx",
+            incremental: true,
+            paths: {
+              "@/*": ["./src/*"],
+            },
+          },
+          include: ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+          exclude: ["node_modules"],
+        },
+        null,
+        2,
+      ),
+    },
+    {
+      path: "src/lib/server/db.ts",
+      language: "ts",
+      description: "Cliente Prisma com inicializacao lazy para build seguro.",
+      content: `import { PrismaClient } from "@prisma/client";
+
+let prisma: PrismaClient | null = null;
+
+export function getDb() {
+  if (!prisma) {
+    prisma = new PrismaClient();
+  }
+
+  return prisma;
+}
+`,
+    },
+    {
+      path: "src/lib/server/auth.ts",
+      language: "ts",
+      description: "Funcoes de autenticacao, senha e sessao para backend.",
+      content: `import bcrypt from "bcryptjs";
+import { cookies } from "next/headers";
+import { getDb } from "./db";
+
+const sessionCookie = "app_session";
+
+export async function hashPassword(password: string) {
+  return bcrypt.hash(password, 10);
+}
+
+export async function verifyPassword(password: string, hash: string) {
+  return bcrypt.compare(password, hash);
+}
+
+export async function createSession(userId: string) {
+  const db = getDb();
+  const token = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+  await db.session.create({ data: { token, userId, expiresAt } });
+  const store = await cookies();
+  store.set(sessionCookie, token, { httpOnly: true, sameSite: "lax", secure: true, path: "/", expires: expiresAt });
+  return token;
+}
+
+export async function getCurrentUser() {
+  const store = await cookies();
+  const token = store.get(sessionCookie)?.value;
+  if (!token) return null;
+  const session = await getDb().session.findUnique({ where: { token }, include: { user: true } });
+  if (!session || session.expiresAt < new Date()) return null;
+  return session.user;
+}
+`,
+    },
+    {
+      path: "src/app/api/auth/register/route.ts",
+      language: "ts",
+      description: "Cadastro real com senha criptografada e sessao.",
+      content: `import { z } from "zod";
+import { createSession, hashPassword } from "@/lib/server/auth";
+import { getDb } from "@/lib/server/db";
+
+const schema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  password: z.string().min(6),
+});
+
+export async function POST(request: Request) {
+  const body = schema.parse(await request.json());
+  const db = getDb();
+  const user = await db.user.create({
+    data: {
+      name: body.name,
+      email: body.email.toLowerCase(),
+      passwordHash: await hashPassword(body.password),
+    },
+  });
+  await createSession(user.id);
+  return Response.json({ user: { id: user.id, name: user.name, email: user.email } }, { status: 201 });
+}
+`,
+    },
+    {
+      path: "src/app/api/auth/login/route.ts",
+      language: "ts",
+      description: "Login funcional com cookie httpOnly.",
+      content: `import { z } from "zod";
+import { createSession, verifyPassword } from "@/lib/server/auth";
+import { getDb } from "@/lib/server/db";
+
+const schema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+export async function POST(request: Request) {
+  const body = schema.parse(await request.json());
+  const user = await getDb().user.findUnique({ where: { email: body.email.toLowerCase() } });
+  if (!user || !(await verifyPassword(body.password, user.passwordHash))) {
+    return Response.json({ error: "Email ou senha invalidos" }, { status: 401 });
+  }
+  await createSession(user.id);
+  return Response.json({ user: { id: user.id, name: user.name, email: user.email } });
+}
+`,
+    },
+    {
+      path: "src/app/api/me/route.ts",
+      language: "ts",
+      description: "Endpoint para recuperar usuario autenticado.",
+      content: `import { getCurrentUser } from "@/lib/server/auth";
+
+export async function GET() {
+  const user = await getCurrentUser();
+  return Response.json({ user: user ? { id: user.id, name: user.name, email: user.email } : null });
+}
+`,
+    },
+    {
+      path: "src/app/api/products/route.ts",
+      language: "ts",
+      description: hasCommerce ? "CRUD base de produtos para vendas e estoque." : "Catalogo de servicos/produtos pronto para evoluir.",
+      content: `import { z } from "zod";
+import { getCurrentUser } from "@/lib/server/auth";
+import { getDb } from "@/lib/server/db";
+
+const schema = z.object({
+  name: z.string().min(2),
+  category: z.string().min(2),
+  price: z.number().nonnegative(),
+  stock: z.number().int().nonnegative().default(0),
+});
+
+export async function GET() {
+  const products = await getDb().product.findMany({ orderBy: { createdAt: "desc" } });
+  return Response.json({ products });
+}
+
+export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) return Response.json({ error: "Nao autenticado" }, { status: 401 });
+  const body = schema.parse(await request.json());
+  const product = await getDb().product.create({ data: body });
+  return Response.json({ product }, { status: 201 });
+}
+`,
+    },
+    {
+      path: "src/app/api/orders/route.ts",
+      language: "ts",
+      description: "Pedidos de venda com baixa de estoque em transacao.",
+      content: `import { z } from "zod";
+import { getCurrentUser } from "@/lib/server/auth";
+import { getDb } from "@/lib/server/db";
+
+const itemSchema = z.object({
+  productId: z.string(),
+  quantity: z.number().int().positive(),
+});
+
+const schema = z.object({
+  customerName: z.string().min(2),
+  customerPhone: z.string().min(8),
+  items: z.array(itemSchema).min(1),
+});
+
+export async function GET() {
+  const orders = await getDb().order.findMany({ include: { items: true }, orderBy: { createdAt: "desc" } });
+  return Response.json({ orders });
+}
+
+export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) return Response.json({ error: "Nao autenticado" }, { status: 401 });
+  const body = schema.parse(await request.json());
+  const db = getDb();
+  const order = await db.$transaction(async (tx) => {
+    const products = await tx.product.findMany({ where: { id: { in: body.items.map((item) => item.productId) } } });
+    const total = body.items.reduce((sum, item) => {
+      const product = products.find((entry) => entry.id === item.productId);
+      if (!product) throw new Error("Produto nao encontrado");
+      if (product.stock < item.quantity) throw new Error("Estoque insuficiente");
+      return sum + product.price * item.quantity;
+    }, 0);
+    const created = await tx.order.create({ data: { customerName: body.customerName, customerPhone: body.customerPhone, total } });
+    for (const item of body.items) {
+      const product = products.find((entry) => entry.id === item.productId);
+      if (!product) continue;
+      await tx.orderItem.create({ data: { orderId: created.id, productId: item.productId, quantity: item.quantity, unitPrice: product.price } });
+      await tx.product.update({ where: { id: item.productId }, data: { stock: { decrement: item.quantity } } });
+      await tx.stockMovement.create({ data: { productId: item.productId, type: "SALE", quantity: -item.quantity, reason: "Venda " + created.id } });
+    }
+    return created;
+  });
+  return Response.json({ order }, { status: 201 });
+}
+`,
+    },
+    {
+      path: "src/app/api/appointments/route.ts",
+      language: "ts",
+      description: hasScheduling ? "Agendamento completo com status, horario e cliente." : "Agenda pronta para servicos, consultas ou reservas.",
+      content: `import { z } from "zod";
+import { getCurrentUser } from "@/lib/server/auth";
+import { getDb } from "@/lib/server/db";
+
+const schema = z.object({
+  customerName: z.string().min(2),
+  customerPhone: z.string().min(8),
+  service: z.string().min(2),
+  startsAt: z.string().datetime(),
+});
+
+export async function GET() {
+  const appointments = await getDb().appointment.findMany({ orderBy: { startsAt: "asc" } });
+  return Response.json({ appointments });
+}
+
+export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) return Response.json({ error: "Nao autenticado" }, { status: 401 });
+  const body = schema.parse(await request.json());
+  const appointment = await getDb().appointment.create({
+    data: { ...body, startsAt: new Date(body.startsAt), status: "SCHEDULED" },
+  });
+  return Response.json({ appointment }, { status: 201 });
+}
+`,
+    },
+    {
+      path: "src/app/admin/page.tsx",
+      language: "tsx",
+      description: "Painel administrativo inicial para produtos, vendas, estoque e agenda.",
+      content: `const sections = [
+  "Produtos e estoque",
+  "Pedidos e vendas",
+  "Agendamentos",
+  "Clientes",
+];
+
+export default function AdminPage() {
+  return (
+    <main className="min-h-screen bg-zinc-950 p-6 text-white">
+      <section className="mx-auto max-w-6xl">
+        <h1 className="text-3xl font-black">Painel administrativo</h1>
+        <div className="mt-8 grid gap-4 md:grid-cols-4">
+          {sections.map((section) => (
+            <article className="rounded-xl border border-white/10 bg-white/5 p-5" key={section}>
+              <h2 className="font-black">{section}</h2>
+              <p className="mt-2 text-sm text-zinc-400">Modulo pronto para conectar com as APIs geradas.</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
+}
+`,
+    },
+  ];
+}
+
+function shouldIncludeCommerce(industry: string) {
+  const normalized = normalize(industry);
+  return ["padaria", "loja", "roupa", "restaurante", "oficina"].some((item) => normalized.includes(item));
+}
+
+function shouldIncludeScheduling(industry: string) {
+  const normalized = normalize(industry);
+  return ["barbearia", "clinica", "odont", "oficina", "academia", "restaurante"].some((item) => normalized.includes(item));
+}
+
+function buildGeneratedPrismaSchema() {
+  return `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String
+  passwordHash String
+  role         String        @default("USER")
+  sessions     Session[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Product {
+  id          String          @id @default(cuid())
+  name        String
+  category    String
+  description String?
+  price       Float
+  stock       Int             @default(0)
+  active      Boolean         @default(true)
+  items       OrderItem[]
+  movements   StockMovement[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model StockMovement {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type      String
+  quantity  Int
+  reason    String?
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  customerName  String
+  customerPhone String
+  status        String      @default("PENDING")
+  total         Float
+  items         OrderItem[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitPrice Float
+}
+
+model Appointment {
+  id            String   @id @default(cuid())
+  customerName  String
+  customerPhone String
+  service       String
+  startsAt      DateTime
+  status        String   @default("SCHEDULED")
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+`;
 }
 
 function buildGeneratedNextFiles(
@@ -1550,10 +2071,13 @@ function buildTemplateTheme(industry: string, palette: Palette, requestedColor?:
 
 function buildTemplateCopy(industry: string, siteName: string, nicheLabel: string, features: string[]) {
   const normalized = normalize(industry);
-  const defaultDifferentials = unique(features.slice(0, 4)).map((feature) => ({
-    title: feature,
-    text: buildFeatureText(feature),
-  }));
+  void features;
+  const defaultDifferentials = [
+    { title: "Atendimento rápido", text: "Contato direto para tirar dúvidas e avançar sem demora." },
+    { title: "Visual profissional", text: "Layout responsivo com hierarquia clara e imagens do nicho." },
+    { title: "Conteúdo editável", text: "Textos, cores e imagens organizados em configuração simples." },
+    { title: "Gestão completa", text: "Base com login, banco, vendas, estoque e agendamentos." },
+  ];
 
   const common = {
     templateSource: "zszoro/Site.git",
@@ -1565,7 +2089,7 @@ function buildTemplateCopy(industry: string, siteName: string, nicheLabel: strin
     address: "Rua Exemplo, 123 - Centro",
     hours: "Segunda a sexta, das 9h às 18h",
     testimonialsTitle: "Quem conhece, recomenda",
-    testimonialsIntro: "Comentários fictícios para demonstrar prova social sem copiar marcas ou textos reais.",
+    testimonialsIntro: "Depoimentos organizados para reforçar confiança e facilitar a decisão.",
     contactTitle: "Contato e atendimento",
     contactIntro: "Chame pelo WhatsApp, tire dúvidas e avance para o próximo passo.",
   };
@@ -1613,7 +2137,7 @@ function buildTemplateCopy(industry: string, siteName: string, nicheLabel: strin
       ],
       categories: ["Pães", "Bolos", "Doces", "Salgados", "Bebidas"],
       productsTitle: "Produtos para todos os momentos",
-      productsIntro: "Escolha por categoria e monte seu pedido com itens fictícios de padaria artesanal.",
+      productsIntro: "Escolha por categoria e monte seu pedido com produtos organizados para compra rápida.",
       promo: {
         eyebrow: "Destaque",
         title: "Combo do café da manhã",
@@ -1623,7 +2147,7 @@ function buildTemplateCopy(industry: string, siteName: string, nicheLabel: strin
         cta: "Pedir no WhatsApp",
       },
       testimonialsTitle: "Quem prova, volta",
-      testimonialsIntro: "Comentários fictícios de clientes para demonstrar a seção de depoimentos.",
+      testimonialsIntro: "Depoimentos de clientes para mostrar qualidade, atendimento e confiança.",
       testimonials: [
         {
           name: "Marina Lopes",
@@ -2174,18 +2698,13 @@ function buildPreviewHtml(input: {
       ? `Sistema para ${input.industry} com clientes, automacoes, metricas e operacao em um so lugar.`
       : directives.description || profile.description,
   );
-  const promptSummary = escapeHtml(firstSentence(input.prompt || "Projeto gerado pela IA ZS."));
-  const editNotes = input.editNotes
-    .map((note) => `<li>${escapeHtml(note)}</li>`)
-    .join("");
-  const featureCards = input.features
-    .slice(0, 6)
+  const featureCards = buildPreviewHighlights(input.industry)
     .map(
-      (feature, index) => `
+      (item, index) => `
         <article class="feature">
           <span>0${index + 1}</span>
-          <strong>${escapeHtml(feature)}</strong>
-          <p>${escapeHtml(buildFeatureText(feature))}</p>
+          <strong>${escapeHtml(item.title)}</strong>
+          <p>${escapeHtml(item.text)}</p>
         </article>`,
     )
     .join("");
@@ -2232,7 +2751,7 @@ function buildPreviewHtml(input: {
         </div>
         <div class="floating-proof">
           <strong>${escapeHtml(profile.proofPoints[0] ?? "Atendimento")}</strong>
-          <span>${escapeHtml(profile.testimonial)}</span>
+          <span>${escapeHtml(buildPreviewProofText(input.industry))}</span>
         </div>
       </section>`;
 
@@ -2736,11 +3255,6 @@ function buildPreviewHtml(input: {
         <div class="proof">
           ${profile.proofPoints.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
         </div>
-        ${
-          editNotes
-            ? `<div class="edit-log"><strong>Edicao aplicada:</strong><ul>${editNotes}</ul></div>`
-            : ""
-        }
       </div>
       ${productSurface}
     </section>
@@ -2753,13 +3267,59 @@ function buildPreviewHtml(input: {
         <p>${escapeHtml(profile.storyText)}</p>
         <div class="contact-card">${contactRows}</div>
         ${mapBlock}
-        <p class="credit">Imagens gratuitas via Unsplash. ${escapeHtml(media.credit)}</p>
       </div>
     </section>
-    <footer><span>${escapedName}</span><span>${promptSummary}</span><span>Gerado pela IA ZS</span></footer>
+    <footer><span>${escapedName}</span><span>Todos os direitos reservados.</span></footer>
   </main>
 </body>
 </html>`;
+}
+
+function buildPreviewHighlights(industry: string) {
+  const normalized = normalize(industry);
+
+  if (normalized.includes("barbearia")) {
+    return [
+      { title: "Agenda organizada", text: "Horários, serviços e contato direto para confirmar atendimentos." },
+      { title: "Serviços claros", text: "Corte, barba, combos e tratamentos com descrição objetiva." },
+      { title: "Experiência premium", text: "Visual forte, fotos do nicho e prova social para gerar confiança." },
+      { title: "Gestão do negócio", text: "Base preparada para clientes, vendas, estoque e agendamentos." },
+    ];
+  }
+
+  if (normalized.includes("padaria")) {
+    return [
+      { title: "Pães frescos", text: "Fornadas ao longo do dia para manter textura, aroma e sabor." },
+      { title: "Produção artesanal", text: "Receitas próprias e ingredientes selecionados para a rotina da vizinhança." },
+      { title: "Pedidos rápidos", text: "Contato direto para encomendas, retirada e entrega." },
+      { title: "Controle completo", text: "Estrutura preparada para produtos, estoque, vendas e pedidos." },
+    ];
+  }
+
+  if (normalized.includes("oficina") || normalized.includes("mecanica")) {
+    return [
+      { title: "Diagnóstico rápido", text: "Serviços automotivos organizados para orçamento e atendimento." },
+      { title: "Agenda de revisões", text: "Horários para revisão, troca de óleo, freios e manutenção." },
+      { title: "Estoque de peças", text: "Base pronta para controlar produtos, entradas e saídas." },
+      { title: "Pedidos e vendas", text: "Fluxo preparado para orçamento, venda e acompanhamento." },
+    ];
+  }
+
+  return [
+    { title: "Área logada", text: "Base para login, cadastro, perfis e permissões." },
+    { title: "Operação comercial", text: "Estrutura para pedidos, vendas e acompanhamento." },
+    { title: "Agenda funcional", text: "Fluxo de horários, status e confirmação de atendimentos." },
+    { title: "Gestão interna", text: "Painel preparado para produtos, clientes e relatórios." },
+  ];
+}
+
+function buildPreviewProofText(industry: string) {
+  const normalized = normalize(industry);
+  if (normalized.includes("barbearia")) return "Serviços, horários e contato em um fluxo direto.";
+  if (normalized.includes("padaria")) return "Produtos, pedidos e funcionamento em uma página clara.";
+  if (normalized.includes("oficina") || normalized.includes("mecanica")) return "Revisões, peças e orçamentos organizados.";
+  if (normalized.includes("restaurante")) return "Cardápio, reservas e contato prontos para conversão.";
+  return "Conteúdo, contato e operação conectados.";
 }
 
 function buildBakerySections(name: string, contact: ReturnType<typeof buildContact>) {
@@ -2900,6 +3460,11 @@ function extractPreviewDirectives(prompt: string): PreviewDirectives {
     titleColor: extractHeroTitleColor(intent),
     imageTarget: extractImageTarget(intent),
   };
+}
+
+function extractSelectedElement(prompt: string) {
+  const match = prompt.match(/Elemento selecionado no preview:\s*([^\n]+)/i);
+  return match ? cleanSentence(match[1], 90) : "";
 }
 
 function applyMediaDirectives<T extends ReturnType<typeof getNicheMedia>>(
@@ -3328,22 +3893,6 @@ function getNicheProfile(industry: string, name: string) {
   };
 }
 
-function buildFeatureText(feature: string) {
-  const normalized = normalize(feature);
-  if (normalized.includes("pagamento")) return "Estrutura pronta para checkout, assinatura e webhooks.";
-  if (normalized.includes("autentic")) return "Fluxo preparado para rotas privadas, sessões e banco.";
-  if (normalized.includes("dashboard")) return "Indicadores e módulos organizados para gestão diária.";
-  if (normalized.includes("hero")) return "Primeiro impacto com mensagem direta e ação clara.";
-  if (normalized.includes("whatsapp")) return "Chamada rápida para contato e conversão.";
-  if (normalized.includes("catalogo")) return "Produtos com categoria, imagem, descrição e preço.";
-  if (normalized.includes("combo")) return "Bloco promocional pronto para pedido rápido.";
-  if (normalized.includes("depoimento")) return "Prova social organizada em cards responsivos.";
-  if (normalized.includes("mapa")) return "Contato com endereço, horário e espaço para mapa.";
-  if (normalized.includes("agendamento")) return "Base para agenda, horários e confirmações.";
-  if (normalized.includes("realtime")) return "Preparado para atualizações em tempo real.";
-  return "Bloco reutilizável para evoluir o produto com consistência.";
-}
-
 function estimateTokenCost(prompt: string, mode: BuilderAssistantResponse["mode"]) {
   const base = mode === "create" ? 44 : mode === "edit" ? 28 : 8;
   return Math.min(120, base + Math.ceil(prompt.length / 42));
@@ -3432,11 +3981,6 @@ function normalize(input: string) {
 
 function unique(items: string[]) {
   return Array.from(new Set(items.filter(Boolean)));
-}
-
-function firstSentence(input: string) {
-  const sentence = input.split(/[.!?\n]/)[0]?.trim();
-  return sentence ? sentence.slice(0, 120) : "Projeto gerado pela IA ZS";
 }
 
 function hasWord(input: string, word: string) {
