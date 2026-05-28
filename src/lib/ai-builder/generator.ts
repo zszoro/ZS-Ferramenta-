@@ -774,20 +774,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     {
       path: "src/app/globals.css",
       language: "css",
-      description: "CSS global com Tailwind.",
+      description: "CSS global com Tailwind e estrutura visual exata do zszoro/Site.git.",
       content: `@import "tailwindcss";
 
-* {
-  box-sizing: border-box;
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  margin: 0;
-}
+${buildSiteTemplateCss()}
 `,
     },
     {
@@ -1108,6 +1098,547 @@ function shouldIncludeScheduling(industry: string) {
   return ["barbearia", "clinica", "odont", "oficina", "academia", "restaurante"].some((item) => normalized.includes(item));
 }
 
+function buildSiteTemplateCss() {
+  return `:root {
+  --cream: #fff8ea;
+  --cream-strong: #f8ead1;
+  --sand: #e9c99b;
+  --honey: #d99522;
+  --honey-dark: #aa6918;
+  --brown: #3b2518;
+  --brown-soft: #6f4f36;
+  --terracotta: #b85f3a;
+  --sage: #69755d;
+  --white: #fffdf8;
+  --border: rgba(76, 45, 25, 0.14);
+  --shadow: 0 18px 50px rgba(92, 51, 20, 0.14);
+  --shadow-soft: 0 12px 30px rgba(92, 51, 20, 0.1);
+  --radius: 8px;
+  --radius-lg: 22px;
+  --header-height: 82px;
+  --container: min(1120px, calc(100vw - 40px));
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--brown);
+  background: var(--cream);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(217, 149, 34, 0.12), transparent 30rem),
+    linear-gradient(180deg, var(--cream), #fffdf8 42%, #f9edd8 100%);
+  color: var(--brown);
+}
+body.nav-open { overflow: hidden; }
+img { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button { font: inherit; }
+.generated-site-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--honey) 14%, transparent), transparent 30rem),
+    linear-gradient(180deg, var(--cream), var(--white) 42%, var(--cream-strong) 100%);
+  color: var(--brown);
+}
+
+.site-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 20;
+  height: var(--header-height);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 24px;
+  padding: 0 max(24px, calc((100vw - 1120px) / 2));
+  background: color-mix(in srgb, var(--cream) 86%, white 14%);
+  border-bottom: 1px solid rgba(76, 45, 25, 0.08);
+  backdrop-filter: blur(18px);
+  transition: box-shadow 180ms ease, background 180ms ease;
+}
+.brand { display: inline-flex; align-items: center; gap: 12px; min-width: 206px; }
+.brand__mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--brown);
+  color: var(--cream);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  box-shadow: 0 10px 24px rgba(59, 37, 24, 0.18);
+}
+.brand__text { display: grid; line-height: 1.1; }
+.brand__text strong { font-size: 1rem; letter-spacing: 0; }
+.brand__text small { color: var(--brown-soft); font-size: 0.76rem; margin-top: 3px; }
+.main-nav {
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.62);
+}
+.main-nav a {
+  border-radius: 999px;
+  color: var(--brown-soft);
+  font-size: 0.91rem;
+  font-weight: 700;
+  padding: 10px 13px;
+  transition: color 180ms ease, background 180ms ease;
+}
+.main-nav a:hover, .main-nav a:focus-visible {
+  color: var(--brown);
+  background: color-mix(in srgb, var(--honey) 18%, transparent);
+}
+.header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.header-cta, .button, .login-cta, .cart-toggle, .product-card__cart {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 0.94rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease, color 180ms ease;
+}
+.header-cta, .button--primary {
+  color: #fffdf8;
+  background: linear-gradient(135deg, var(--honey), var(--terracotta));
+  box-shadow: 0 14px 28px rgba(184, 95, 58, 0.22);
+}
+.header-cta { padding: 0 18px; white-space: nowrap; }
+.login-cta, .cart-toggle {
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid rgba(59, 37, 24, 0.14);
+  background: rgba(255, 253, 248, 0.76);
+  color: var(--brown);
+}
+.cart-toggle span {
+  display: inline-grid;
+  min-width: 22px;
+  min-height: 22px;
+  place-items: center;
+  margin-left: 7px;
+  border-radius: 999px;
+  background: var(--brown);
+  color: var(--cream);
+  font-size: 0.72rem;
+}
+.button { padding: 0 22px; }
+.button--secondary {
+  color: var(--brown);
+  background: rgba(255, 253, 248, 0.76);
+  border: 1px solid rgba(59, 37, 24, 0.16);
+}
+.header-cta:hover, .button:hover, .login-cta:hover, .cart-toggle:hover, .product-card__cart:hover { transform: translateY(-2px); }
+.button--primary:hover, .header-cta:hover { box-shadow: 0 18px 34px rgba(184, 95, 58, 0.28); }
+.button--secondary:hover, .login-cta:hover, .cart-toggle:hover { background: var(--white); box-shadow: var(--shadow-soft); }
+.nav-toggle {
+  display: none;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--brown);
+  cursor: pointer;
+}
+.nav-toggle span {
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+.nav-toggle.is-active span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.nav-toggle.is-active span:nth-child(2) { opacity: 0; }
+.nav-toggle.is-active span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+.section {
+  width: var(--container);
+  margin-inline: auto;
+  scroll-margin-top: calc(var(--header-height) + 24px);
+}
+.hero {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(420px, 1.05fr);
+  align-items: center;
+  gap: 54px;
+  padding-top: calc(var(--header-height) + 34px);
+  padding-bottom: 86px;
+}
+.hero__content h1 {
+  margin: 0;
+  max-width: 660px;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(3rem, 8vw, 5.7rem);
+  line-height: 0.94;
+  letter-spacing: 0;
+}
+.hero__content p {
+  max-width: 540px;
+  margin: 24px 0 0;
+  color: var(--brown-soft);
+  font-size: clamp(1.05rem, 2vw, 1.24rem);
+  line-height: 1.72;
+}
+.hero__actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; }
+.hero__media { position: relative; }
+.hero__media img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 32px 8px 32px 8px;
+  box-shadow: 0 28px 70px rgba(73, 38, 15, 0.2);
+}
+.hero__note {
+  position: absolute;
+  right: clamp(14px, 4vw, 36px);
+  bottom: -24px;
+  display: grid;
+  gap: 3px;
+  width: min(230px, calc(100% - 28px));
+  padding: 18px;
+  border: 1px solid rgba(59, 37, 24, 0.12);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.92);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+}
+.hero__note strong { font-size: 1rem; }
+.hero__note span { color: var(--brown-soft); font-size: 0.88rem; }
+.section-heading { max-width: 680px; margin-bottom: 34px; }
+.section-heading--center { margin-inline: auto; text-align: center; }
+.section-heading__line {
+  display: block;
+  width: 54px;
+  height: 3px;
+  margin-bottom: 16px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--honey), var(--terracotta));
+}
+.section-heading--center .section-heading__line { margin-inline: auto; }
+.section-heading h2 {
+  margin: 0;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(2.2rem, 5vw, 3.9rem);
+  line-height: 1;
+  letter-spacing: 0;
+}
+.section-heading p {
+  margin: 18px 0 0;
+  color: var(--brown-soft);
+  font-size: 1.02rem;
+  line-height: 1.72;
+}
+.about, .products, .testimonials, .contact { padding-block: 84px; }
+.about__grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.86fr) minmax(0, 1.14fr);
+  gap: 28px;
+  align-items: stretch;
+}
+.about__story, .feature-card, .product-card, .testimonial-card, .map-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.78);
+  box-shadow: var(--shadow-soft);
+}
+.about__story {
+  display: grid;
+  align-content: end;
+  min-height: 360px;
+  padding: 34px;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.62), rgba(248, 234, 209, 0.9)),
+    radial-gradient(circle at top right, rgba(105, 117, 93, 0.2), transparent 16rem);
+}
+.about__story h3 { margin: 0 0 14px; font-size: 1.42rem; }
+.about__story p, .feature-card p, .product-card p, .testimonial-card p { margin: 0; color: var(--brown-soft); line-height: 1.68; }
+.feature-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.feature-card { padding: 24px; transition: transform 180ms ease, box-shadow 180ms ease; }
+.feature-card:hover, .product-card:hover, .testimonial-card:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
+.feature-card__icon {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  margin-bottom: 28px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--honey) 14%, transparent);
+  color: var(--honey-dark);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.feature-card h3 { margin: 0 0 10px; font-size: 1.12rem; }
+.menu-panel {
+  padding: 28px;
+  border: 1px solid rgba(59, 37, 24, 0.13);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.78), rgba(255, 248, 234, 0.9)),
+    radial-gradient(circle at bottom right, color-mix(in srgb, var(--honey) 18%, transparent), transparent 24rem);
+  box-shadow: var(--shadow-soft);
+}
+.category-tabs { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: thin; }
+.category-tabs button {
+  flex: 0 0 auto;
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--brown-soft);
+  font: inherit;
+  font-size: 0.91rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+.category-tabs button:hover, .category-tabs button.is-active { border-color: color-mix(in srgb, var(--honey) 45%, transparent); background: var(--brown); color: var(--cream); }
+.product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 24px; }
+.product-card { overflow: hidden; background: var(--white); transition: transform 180ms ease, box-shadow 180ms ease; }
+.product-card__media { min-height: 188px; background-repeat: no-repeat; }
+.product-card__body { display: grid; gap: 12px; padding: 20px; }
+.product-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.product-card h3 { margin: 0; font-size: 1.12rem; line-height: 1.2; }
+.product-card__price { color: var(--terracotta); font-weight: 900; white-space: nowrap; }
+.product-card__category {
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(105, 117, 93, 0.12);
+  color: var(--sage);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+.product-card__cart {
+  min-height: 42px;
+  width: 100%;
+  background: var(--brown);
+  color: var(--cream);
+}
+.promo {
+  display: grid;
+  grid-template-columns: minmax(0, 0.86fr) minmax(280px, 0.52fr);
+  gap: 32px;
+  align-items: center;
+  width: min(1180px, calc(100vw - 40px));
+  padding: 52px;
+  border-radius: 28px;
+  background: linear-gradient(135deg, var(--brown), color-mix(in srgb, var(--brown) 78%, var(--terracotta)) 58%, var(--terracotta)), var(--brown);
+  color: var(--cream);
+  box-shadow: 0 28px 80px rgba(59, 37, 24, 0.22);
+}
+.promo__content h2 { margin: 0; font-family: "Playfair Display", Georgia, serif; font-size: clamp(2.4rem, 5vw, 4rem); line-height: 1; letter-spacing: 0; }
+.promo__content p { max-width: 560px; margin: 18px 0 0; color: rgba(255, 248, 234, 0.78); font-size: 1.06rem; line-height: 1.7; }
+.promo__meta { display: flex; align-items: baseline; gap: 12px; margin: 24px 0; }
+.promo__meta span { color: rgba(255, 248, 234, 0.68); font-weight: 700; }
+.promo__meta strong { color: #ffd37b; font-size: 2rem; }
+.promo .button--primary { background: linear-gradient(135deg, #f2b842, var(--honey)); color: var(--brown); }
+.promo__visual { min-height: 290px; }
+.sprite-image {
+  width: 100%;
+  height: 100%;
+  min-height: 290px;
+  border: 8px solid rgba(255, 248, 234, 0.18);
+  border-radius: 8px 28px 8px 28px;
+  background-repeat: no-repeat;
+  box-shadow: 0 24px 55px rgba(0, 0, 0, 0.22);
+}
+.testimonial-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.testimonial-card { display: grid; gap: 18px; padding: 24px; transition: transform 180ms ease, box-shadow 180ms ease; }
+.testimonial-card__rating { color: var(--honey-dark); letter-spacing: 0; font-size: 1.05rem; }
+.testimonial-card__author { display: grid; gap: 2px; }
+.testimonial-card__author strong { font-size: 1rem; }
+.testimonial-card__author span { color: var(--brown-soft); font-size: 0.88rem; }
+.contact { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(320px, 1fr); gap: 34px; align-items: stretch; }
+.contact-list { display: grid; gap: 14px; }
+.contact-list article { display: grid; gap: 6px; padding: 18px 20px; border-left: 3px solid var(--honey); border-radius: var(--radius); background: rgba(255, 253, 248, 0.74); box-shadow: var(--shadow-soft); }
+.contact-list strong { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0; }
+.contact-list span { color: var(--brown-soft); line-height: 1.55; }
+.contact-whatsapp { margin-top: 24px; }
+.map-card {
+  position: relative;
+  display: grid;
+  min-height: 410px;
+  place-content: center;
+  gap: 8px;
+  overflow: hidden;
+  text-align: center;
+  background:
+    linear-gradient(rgba(255, 253, 248, 0.72), rgba(255, 253, 248, 0.82)),
+    repeating-linear-gradient(0deg, transparent 0 38px, rgba(59, 37, 24, 0.08) 38px 40px),
+    repeating-linear-gradient(90deg, transparent 0 38px, rgba(59, 37, 24, 0.08) 38px 40px),
+    var(--cream-strong);
+}
+.map-card::before, .map-card::after { content: ""; position: absolute; border-radius: 999px; background: rgba(184, 95, 58, 0.18); }
+.map-card::before { width: 210px; height: 210px; right: -64px; top: -72px; }
+.map-card::after { width: 140px; height: 140px; left: -48px; bottom: -48px; }
+.map-card__pin { position: relative; z-index: 1; width: 42px; height: 42px; margin: 0 auto 8px; border-radius: 50% 50% 50% 0; background: var(--terracotta); transform: rotate(-45deg); box-shadow: 0 12px 24px rgba(184, 95, 58, 0.2); }
+.map-card__pin::after { content: ""; position: absolute; inset: 12px; border-radius: 50%; background: var(--cream); }
+.map-card strong, .map-card span { position: relative; z-index: 1; }
+.map-card strong { font-size: 1.32rem; }
+.map-card span { color: var(--brown-soft); }
+.site-footer {
+  width: var(--container);
+  margin: 40px auto 0;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 24px;
+  padding: 32px 0 42px;
+  border-top: 1px solid var(--border);
+}
+.footer__brand { display: grid; gap: 4px; }
+.footer__brand strong { font-family: "Playfair Display", Georgia, serif; font-size: 1.4rem; }
+.footer__brand span, .site-footer p { color: var(--brown-soft); font-size: 0.9rem; }
+.footer__links, .footer__social { display: flex; align-items: center; gap: 12px; }
+.footer__links a { color: var(--brown-soft); font-size: 0.9rem; font-weight: 700; }
+.footer__links a:hover { color: var(--brown); }
+.footer__social a { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; background: rgba(59, 37, 24, 0.08); color: var(--brown); font-size: 0.78rem; font-weight: 900; }
+.site-footer p { grid-column: 1 / -1; margin: 0; }
+.reveal { opacity: 0; transform: translateY(22px); transition: opacity 580ms ease, transform 580ms ease; transition-delay: var(--delay, 0ms); }
+.reveal.is-visible, .generated-site-shell .reveal { opacity: 1; transform: translateY(0); }
+.auth-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(35, 22, 12, 0.52);
+  backdrop-filter: blur(16px);
+}
+.auth-modal, .cart-drawer {
+  position: relative;
+  width: min(420px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: rgba(255, 253, 248, 0.96);
+  box-shadow: 0 28px 80px rgba(59, 37, 24, 0.22);
+  padding: 28px;
+}
+.auth-modal h2, .cart-drawer h2 { margin: 0; font-family: "Playfair Display", Georgia, serif; font-size: 2.2rem; line-height: 1; }
+.auth-modal p, .cart-drawer p { color: var(--brown-soft); line-height: 1.6; }
+.auth-modal form { display: grid; gap: 14px; margin-top: 20px; }
+.auth-modal label { display: grid; gap: 7px; color: var(--brown-soft); font-size: 0.88rem; font-weight: 800; }
+.auth-modal input {
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--brown);
+  padding: 0 12px;
+  outline: none;
+}
+.auth-status { color: var(--terracotta); font-size: 0.86rem; }
+.auth-switch { margin-top: 14px; border: 0; background: transparent; color: var(--brown-soft); cursor: pointer; font-weight: 800; }
+.modal-close {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--brown);
+  cursor: pointer;
+  font-size: 1.2rem;
+}
+.cart-drawer {
+  position: fixed;
+  z-index: 55;
+  top: calc(var(--header-height) + 18px);
+  right: max(20px, calc((100vw - 1120px) / 2));
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+}
+.cart-list { display: grid; gap: 12px; margin-top: 18px; }
+.cart-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--white); }
+.cart-item div:first-child { display: grid; gap: 4px; }
+.cart-item span { color: var(--brown-soft); font-size: 0.88rem; }
+.cart-controls { display: inline-flex; align-items: center; gap: 8px; }
+.cart-controls button { width: 30px; height: 30px; border: 0; border-radius: 50%; background: var(--brown); color: var(--cream); cursor: pointer; }
+.cart-total { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--border); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 1ms !important; animation-duration: 1ms !important; }
+}
+@media (max-width: 1040px) {
+  .site-header { grid-template-columns: auto auto auto; }
+  .main-nav {
+    position: fixed;
+    top: calc(var(--header-height) + 10px);
+    right: 20px;
+    left: 20px;
+    display: grid;
+    justify-items: stretch;
+    padding: 16px;
+    border-radius: var(--radius-lg);
+    background: rgba(255, 253, 248, 0.98);
+    box-shadow: var(--shadow);
+    transform: translateY(-10px);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .main-nav.is-open { transform: translateY(0); opacity: 1; pointer-events: auto; }
+  .main-nav a { padding: 13px 14px; }
+  .nav-toggle { display: inline-flex; justify-self: end; }
+  .header-actions { justify-self: end; }
+  .hero { grid-template-columns: 1fr; min-height: auto; }
+  .hero__content { max-width: 760px; }
+  .about__grid, .promo, .contact { grid-template-columns: 1fr; }
+  .product-grid, .testimonial-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .site-footer { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  :root { --header-height: 72px; --container: min(100vw - 28px, 1120px); }
+  .site-header { gap: 10px; padding-inline: 14px; }
+  .brand { min-width: 0; }
+  .brand__mark { width: 38px; height: 38px; }
+  .brand__text small, .header-cta { display: none; }
+  .login-cta { display: none; }
+  .cart-toggle { min-height: 40px; padding: 0 10px; font-size: 0.78rem; }
+  .hero { gap: 36px; padding-top: calc(var(--header-height) + 44px); padding-bottom: 58px; }
+  .hero__content h1 { font-size: clamp(2.68rem, 16vw, 4.2rem); }
+  .hero__actions { display: grid; }
+  .hero__media img { aspect-ratio: 1 / 1; border-radius: 24px 8px 24px 8px; }
+  .hero__note { position: static; margin: -20px 14px 0 auto; }
+  .about, .products, .testimonials, .contact { padding-block: 58px; }
+  .feature-grid, .product-grid, .testimonial-grid { grid-template-columns: 1fr; }
+  .about__story, .feature-card, .testimonial-card { padding: 22px; }
+  .menu-panel { padding: 18px; border-radius: 18px; }
+  .product-card__media { min-height: 210px; }
+  .promo { width: var(--container); padding: 30px 22px; border-radius: 20px; }
+  .map-card { min-height: 330px; }
+  .footer__links { flex-wrap: wrap; }
+  .cart-drawer { inset-inline: 14px; right: 14px; width: auto; }
+}
+@media (max-width: 420px) {
+  .brand__text strong { max-width: 118px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav-toggle { width: 40px; height: 40px; }
+}`;
+}
+
 function buildGeneratedPrismaSchema() {
   return `generator client {
   provider = "prisma-client-js"
@@ -1273,7 +1804,7 @@ export default function Page() {
 function buildGeneratedSiteIndexSource(slug: string, component: string) {
   return `"use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, FormEvent } from "react";
 import { useMemo, useState } from "react";
 import { generatedSiteConfig, type GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
 import { ContactSection } from "./ContactSection";
@@ -1283,8 +1814,18 @@ import { Header } from "./Header";
 import { Hero } from "./Hero";
 import { SiteEditor } from "./SiteEditor";
 
+type Product = GeneratedSiteConfig["products"][number];
+
+type CartItem = {
+  product: Product;
+  quantity: number;
+};
+
 export function ${component}() {
   const [site, setSite] = useState<GeneratedSiteConfig>(generatedSiteConfig);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   const whatsappHref = useMemo(() => {
     const digits = site.contact.whatsapp.replace(/\\D/g, "");
@@ -1296,6 +1837,23 @@ export function ${component}() {
     return "https://wa.me/" + digits + "?text=" + encodeURIComponent(site.whatsappMessage);
   }, [site.contact.whatsapp, site.whatsappMessage]);
 
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const cartTotal = cart.reduce((sum, item) => sum + priceToNumber(item.product.price) * item.quantity, 0);
+
+  const checkoutHref = useMemo(() => {
+    const digits = site.contact.whatsapp.replace(/\\D/g, "");
+    if (digits.length < 10 || cart.length === 0) return whatsappHref;
+
+    const lines = cart.map((item) => "- " + item.quantity + "x " + item.product.name + " (" + item.product.price + ")");
+    const message = [
+      "Olá, vim pelo site da " + site.name + " e quero finalizar este pedido:",
+      ...lines,
+      "Total aproximado: " + formatCurrency(cartTotal),
+    ].join("\\n");
+
+    return "https://wa.me/" + digits + "?text=" + encodeURIComponent(message);
+  }, [cart, cartTotal, site.contact.whatsapp, site.name, whatsappHref]);
+
   function updateSite<Key extends keyof GeneratedSiteConfig>(
     key: Key,
     value: GeneratedSiteConfig[Key],
@@ -1306,31 +1864,186 @@ export function ${component}() {
     }));
   }
 
+  function addToCart(product: Product) {
+    setCart((current) => {
+      const existing = current.find((item) => item.product.name === product.name);
+      if (existing) {
+        return current.map((item) =>
+          item.product.name === product.name ? { ...item, quantity: item.quantity + 1 } : item,
+        );
+      }
+
+      return [...current, { product, quantity: 1 }];
+    });
+    setIsCartOpen(true);
+  }
+
+  function updateCartQuantity(productName: string, quantity: number) {
+    setCart((current) =>
+      current
+        .map((item) => (item.product.name === productName ? { ...item, quantity } : item))
+        .filter((item) => item.quantity > 0),
+    );
+  }
+
   return (
     <main
-      className="min-h-screen overflow-x-hidden bg-[var(--site-bg)] text-[var(--site-text)]"
+      className="generated-site-shell"
       style={
         {
-          "--site-bg": site.theme.background,
-          "--site-bg-soft": site.theme.backgroundSoft,
-          "--site-card": site.theme.card,
-          "--site-primary": site.theme.primary,
-          "--site-primary-dark": site.theme.primaryDark,
-          "--site-secondary": site.theme.secondary,
-          "--site-text": site.theme.text,
-          "--site-muted": site.theme.muted,
-          "--site-border": site.theme.border,
-          "--site-shadow": site.theme.shadow,
+          "--cream": site.theme.background,
+          "--cream-strong": site.theme.backgroundSoft,
+          "--white": site.theme.card,
+          "--honey": site.theme.primary,
+          "--honey-dark": site.theme.primaryDark,
+          "--terracotta": site.theme.primaryDark,
+          "--brown": site.theme.text,
+          "--brown-soft": site.theme.muted,
+          "--border": site.theme.border,
+          "--shadow": site.theme.shadow,
         } as CSSProperties
       }
     >
-      <Header site={site} whatsappHref={whatsappHref} />
+      <Header
+        cartCount={cartCount}
+        site={site}
+        whatsappHref={whatsappHref}
+        onCartClick={() => setIsCartOpen(true)}
+        onLoginClick={() => setIsAuthOpen(true)}
+      />
       <Hero site={site} whatsappHref={whatsappHref} />
-      <Features site={site} whatsappHref={whatsappHref} />
+      <Features site={site} whatsappHref={whatsappHref} onAddToCart={addToCart} />
       <ContactSection site={site} whatsappHref={whatsappHref} />
       <Footer site={site} />
+      {isAuthOpen ? <AuthModal site={site} onClose={() => setIsAuthOpen(false)} /> : null}
+      <CartDrawer
+        cart={cart}
+        checkoutHref={checkoutHref}
+        isOpen={isCartOpen}
+        total={cartTotal}
+        onClose={() => setIsCartOpen(false)}
+        onQuantityChange={updateCartQuantity}
+      />
       <SiteEditor site={site} onUpdate={updateSite} />
     </main>
+  );
+}
+
+function priceToNumber(price: string) {
+  const normalized = price
+    .replace(/[^\\d,.-]/g, "")
+    .replace(/\\.(?=\\d{3})/g, "")
+    .replace(",", ".");
+  const value = Number.parseFloat(normalized);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+
+function AuthModal({ site, onClose }: { site: GeneratedSiteConfig; onClose: () => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [status, setStatus] = useState("");
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get("email") ?? "").trim();
+    const password = String(form.get("password") ?? "");
+    const name = String(form.get("name") ?? "").trim();
+
+    if (!email.includes("@") || password.length < 6 || (mode === "register" && name.length < 2)) {
+      setStatus("Preencha os dados corretamente para continuar.");
+      return;
+    }
+
+    setStatus(mode === "login" ? "Login pronto para conectar ao backend." : "Conta cadastrada na interface. Conecte ao endpoint /api/auth/register.");
+  }
+
+  return (
+    <div className="auth-backdrop" role="dialog" aria-modal="true" aria-label="Entrar na conta">
+      <section className="auth-modal">
+        <button className="modal-close" onClick={onClose} type="button" aria-label="Fechar login">
+          ×
+        </button>
+        <span className="section-heading__line" />
+        <h2>{mode === "login" ? "Entrar em " + site.name : "Criar conta"}</h2>
+        <p>
+          Acesso preparado para clientes acompanharem pedidos, compras e agendamentos.
+        </p>
+        <form onSubmit={submit}>
+          {mode === "register" ? (
+            <label>
+              Nome
+              <input name="name" placeholder="Seu nome" />
+            </label>
+          ) : null}
+          <label>
+            Email
+            <input name="email" placeholder="voce@email.com" type="email" />
+          </label>
+          <label>
+            Senha
+            <input name="password" placeholder="Minimo 6 caracteres" type="password" />
+          </label>
+          {status ? <strong className="auth-status">{status}</strong> : null}
+          <button className="button button--primary" type="submit">
+            {mode === "login" ? "Entrar" : "Cadastrar"}
+          </button>
+        </form>
+        <button className="auth-switch" onClick={() => setMode(mode === "login" ? "register" : "login")} type="button">
+          {mode === "login" ? "Não tenho conta, cadastrar" : "Já tenho conta, entrar"}
+        </button>
+      </section>
+    </div>
+  );
+}
+
+function CartDrawer(props: {
+  cart: CartItem[];
+  checkoutHref: string;
+  isOpen: boolean;
+  total: number;
+  onClose: () => void;
+  onQuantityChange: (productName: string, quantity: number) => void;
+}) {
+  if (!props.isOpen) return null;
+
+  return (
+    <aside className="cart-drawer" aria-label="Carrinho">
+      <button className="modal-close" onClick={props.onClose} type="button" aria-label="Fechar carrinho">
+        ×
+      </button>
+      <span className="section-heading__line" />
+      <h2>Carrinho</h2>
+      {props.cart.length === 0 ? (
+        <p>Adicione produtos para montar o pedido.</p>
+      ) : (
+        <div className="cart-list">
+          {props.cart.map((item) => (
+            <article className="cart-item" key={item.product.name}>
+              <div>
+                <strong>{item.product.name}</strong>
+                <span>{item.product.price}</span>
+              </div>
+              <div className="cart-controls">
+                <button onClick={() => props.onQuantityChange(item.product.name, item.quantity - 1)} type="button">-</button>
+                <span>{item.quantity}</span>
+                <button onClick={() => props.onQuantityChange(item.product.name, item.quantity + 1)} type="button">+</button>
+              </div>
+            </article>
+          ))}
+          <div className="cart-total">
+            <span>Total</span>
+            <strong>{formatCurrency(props.total)}</strong>
+          </div>
+          <a className="button button--primary" href={props.checkoutHref} target="_blank" rel="noreferrer">
+            Finalizar pedido
+          </a>
+        </div>
+      )}
+    </aside>
   );
 }
 `;
@@ -1343,76 +2056,65 @@ import { useState } from "react";
 import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
 
 type HeaderProps = {
+  cartCount: number;
   site: GeneratedSiteConfig;
   whatsappHref: string;
+  onCartClick: () => void;
+  onLoginClick: () => void;
 };
 
-export function Header({ site, whatsappHref }: HeaderProps) {
+export function Header({ cartCount, site, whatsappHref, onCartClick, onLoginClick }: HeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
   const brandInitial = site.name.trim().charAt(0).toUpperCase() || "Z";
 
   return (
-    <header className="fixed inset-x-0 top-0 z-40 h-[82px] border-b border-[var(--site-border)] bg-[var(--site-bg)]/85 backdrop-blur-[18px]">
-      <div className="mx-auto grid h-full w-[min(1120px,calc(100vw-40px))] grid-cols-[auto_1fr_auto] items-center gap-6">
-        <a className="inline-flex min-w-[206px] items-center gap-3" href="#inicio" aria-label={site.name}>
-          <span className="grid size-[42px] shrink-0 place-items-center rounded-full bg-[var(--site-text)] font-serif text-[1.35rem] font-black text-[var(--site-bg)] shadow-[0_10px_24px_rgba(59,37,24,0.18)]">
-            {brandInitial}
-          </span>
-          <span className="grid min-w-0 leading-[1.1]">
-            <strong className="truncate text-base font-black tracking-normal">{site.name}</strong>
-            <small className="mt-1 truncate text-xs font-semibold text-[var(--site-muted)]">{site.brandTagline}</small>
-          </span>
+    <header className="site-header" data-header>
+      <a className="brand" href="#inicio" aria-label={site.name}>
+        <span className="brand__mark" aria-hidden="true">{brandInitial}</span>
+        <span className="brand__text">
+          <strong>{site.name}</strong>
+          <small>{site.brandTagline}</small>
+        </span>
+      </a>
+
+      <button
+        className={"nav-toggle" + (isOpen ? " is-active" : "")}
+        type="button"
+        aria-label={isOpen ? "Fechar menu" : "Abrir menu"}
+        aria-expanded={isOpen}
+        data-nav-toggle
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        <span />
+        <span />
+        <span />
+      </button>
+
+      <nav className={"main-nav" + (isOpen ? " is-open" : "")} aria-label="Menu principal" data-nav>
+        {site.navigation.map((item) => (
+          <a href={item.href} key={item.href} onClick={() => setIsOpen(false)}>
+            {item.label}
+          </a>
+        ))}
+      </nav>
+
+      <div className="header-actions">
+        <a
+          className="header-cta"
+          href={whatsappHref}
+          rel={isExternalWhatsapp ? "noreferrer" : undefined}
+          target={isExternalWhatsapp ? "_blank" : undefined}
+        >
+          {site.headerCta}
         </a>
-
-        <nav className="hidden justify-self-center rounded-full border border-[var(--site-border)] bg-white/60 p-1 lg:flex" aria-label="Menu principal">
-          {site.navigation.map((item) => (
-            <a className="rounded-full px-[13px] py-2.5 text-[0.91rem] font-bold text-[var(--site-muted)] transition hover:bg-[var(--site-primary)]/15 hover:text-[var(--site-text)]" href={item.href} key={item.href}>
-              {item.label}
-            </a>
-          ))}
-        </nav>
-
-        <div className="flex items-center justify-end gap-2">
-          <a
-            className="hidden min-h-[46px] items-center justify-center whitespace-nowrap rounded-full bg-gradient-to-br from-[var(--site-primary)] to-[var(--site-primary-dark)] px-[18px] text-[0.94rem] font-black text-white shadow-[0_14px_28px_rgba(184,95,58,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(184,95,58,0.28)] sm:inline-flex"
-            href={whatsappHref}
-            rel={isExternalWhatsapp ? "noreferrer" : undefined}
-            target={isExternalWhatsapp ? "_blank" : undefined}
-          >
-            {site.headerCta}
-          </a>
-          <button
-            aria-expanded={isOpen}
-            aria-label={isOpen ? "Fechar menu" : "Abrir menu"}
-            className="inline-flex size-11 flex-col items-center justify-center gap-1.5 rounded-full border border-[var(--site-border)] bg-white text-[var(--site-text)] lg:hidden"
-            onClick={() => setIsOpen((current) => !current)}
-            type="button"
-          >
-            <span className={\`h-0.5 w-5 rounded-full bg-current transition \${isOpen ? "translate-y-2 rotate-45" : ""}\`} />
-            <span className={\`h-0.5 w-5 rounded-full bg-current transition \${isOpen ? "opacity-0" : ""}\`} />
-            <span className={\`h-0.5 w-5 rounded-full bg-current transition \${isOpen ? "-translate-y-2 -rotate-45" : ""}\`} />
-          </button>
-        </div>
+        <button className="login-cta" onClick={onLoginClick} type="button">
+          Entrar
+        </button>
+        <button className="cart-toggle" onClick={onCartClick} type="button" aria-label="Abrir carrinho">
+          Carrinho <span>{cartCount}</span>
+        </button>
       </div>
-      {isOpen ? (
-        <nav className="mx-auto mb-4 grid w-[min(1120px,calc(100vw-40px))] gap-2 rounded-3xl border border-[var(--site-border)] bg-white p-3 shadow-[var(--site-shadow)] lg:hidden" aria-label="Menu mobile">
-          {site.navigation.map((item) => (
-            <a className="rounded-2xl px-4 py-3 text-sm font-black text-[var(--site-muted)] hover:bg-[var(--site-bg-soft)]" href={item.href} key={item.href} onClick={() => setIsOpen(false)}>
-              {item.label}
-            </a>
-          ))}
-          <a
-            className="rounded-2xl bg-[var(--site-primary)] px-4 py-3 text-center text-sm font-black text-white"
-            href={whatsappHref}
-            onClick={() => setIsOpen(false)}
-            rel={isExternalWhatsapp ? "noreferrer" : undefined}
-            target={isExternalWhatsapp ? "_blank" : undefined}
-          >
-            {site.headerCta}
-          </a>
-        </nav>
-      ) : null}
     </header>
   );
 }
@@ -1420,7 +2122,8 @@ export function Header({ site, whatsappHref }: HeaderProps) {
 }
 
 function buildGeneratedHeroSource(slug: string) {
-  return `import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
+  return `import type { CSSProperties } from "react";
+import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
 
 type HeroProps = {
   site: GeneratedSiteConfig;
@@ -1431,49 +2134,34 @@ export function Hero({ site, whatsappHref }: HeroProps) {
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
 
   return (
-    <section
-      className="relative isolate mx-auto mt-[82px] grid min-h-[calc(100vh-82px)] w-full overflow-hidden bg-[var(--site-text)]"
-      id="inicio"
-      style={{
-        backgroundImage:
-          "linear-gradient(90deg, rgba(20, 12, 6, 0.82), rgba(20, 12, 6, 0.48) 48%, rgba(20, 12, 6, 0.12)), url('" +
-          site.images.hero +
-          "')",
-        backgroundPosition: "center",
-        backgroundSize: "cover",
-      }}
-    >
-      <div className="mx-auto flex min-h-[calc(100vh-82px)] w-[min(1120px,calc(100vw-40px))] items-center py-20">
-        <div className="max-w-[680px]">
-        <p className="text-sm font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">
-          {site.hero.eyebrow}
-        </p>
-        <h1 className="mt-4 font-serif text-[clamp(3rem,8vw,5.7rem)] font-black leading-[0.94] tracking-tight text-white">
+    <section className="hero section" id="inicio">
+      <div className="hero__content reveal">
+        <h1>
           {site.hero.title}
         </h1>
-        <p className="mt-6 max-w-xl text-lg leading-8 text-white/82">
+        <p>
           {site.hero.subtitle}
         </p>
-        <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+        <div className="hero__actions" aria-label="Acoes principais">
           <a
-            className="inline-flex min-h-[46px] items-center justify-center rounded-full bg-gradient-to-br from-[var(--site-primary)] to-[var(--site-primary-dark)] px-7 text-sm font-black text-white shadow-[0_14px_28px_rgba(184,95,58,0.28)] transition hover:-translate-y-0.5"
+            className="button button--primary"
             href={whatsappHref}
             rel={isExternalWhatsapp ? "noreferrer" : undefined}
             target={isExternalWhatsapp ? "_blank" : undefined}
           >
             {site.hero.primaryCta}
           </a>
-          <a
-            className="inline-flex min-h-[46px] items-center justify-center rounded-full border border-white/35 bg-white/14 px-7 text-sm font-black text-white backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/22"
-            href="#produtos"
-          >
+          <a className="button button--secondary" href="#produtos">
             {site.hero.secondaryCta}
           </a>
         </div>
-        <div className="mt-8 inline-grid rounded-[1.25rem] border border-white/35 bg-white/16 p-4 text-white shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur">
-          <p className="text-sm font-black">{site.hero.cardTitle}</p>
-          <p className="mt-1 text-sm text-white/75">{site.hero.cardText}</p>
-        </div>
+      </div>
+
+      <div className="hero__media reveal" style={{ "--delay": "120ms" } as CSSProperties}>
+        <img src={site.images.hero} alt={site.images.heroAlt} />
+        <div className="hero__note" aria-label="Informacao de destaque">
+          <strong>{site.hero.cardTitle}</strong>
+          <span>{site.hero.cardText}</span>
         </div>
       </div>
     </section>
@@ -1485,15 +2173,17 @@ export function Hero({ site, whatsappHref }: HeroProps) {
 function buildGeneratedFeaturesSource(slug: string) {
   return `"use client";
 
+import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
 import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
 
 type FeaturesProps = {
   site: GeneratedSiteConfig;
   whatsappHref: string;
+  onAddToCart: (product: GeneratedSiteConfig["products"][number]) => void;
 };
 
-export function Features({ site, whatsappHref }: FeaturesProps) {
+export function Features({ site, whatsappHref, onAddToCart }: FeaturesProps) {
   const [selectedCategory, setSelectedCategory] = useState("Todos");
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
   const categories = ["Todos", ...site.categories];
@@ -1507,47 +2197,54 @@ export function Features({ site, whatsappHref }: FeaturesProps) {
 
   return (
     <>
-      <section className="mx-auto w-[min(1120px,calc(100vw-40px))] scroll-mt-28 py-16" id="sobre">
-        <div className="grid gap-10 lg:grid-cols-[0.82fr_1.18fr]">
-          <div>
-            <span className="block h-1 w-16 rounded-full bg-gradient-to-r from-[var(--site-primary)] to-[var(--site-primary-dark)]" />
-            <h2 className="mt-5 font-serif text-4xl font-black leading-tight tracking-tight text-[var(--site-text)] sm:text-5xl">
-              {site.about.title}
-            </h2>
-            <p className="mt-5 text-base leading-8 text-[var(--site-muted)]">{site.about.text}</p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {site.differentials.map((item) => (
-              <article className="rounded-[1.4rem] border border-[var(--site-border)] bg-white/75 p-6 shadow-[var(--site-shadow)]" key={item.title}>
-                <span className="text-xs font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">{item.code}</span>
-                <h3 className="mt-3 text-xl font-black text-[var(--site-text)]">{item.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-[var(--site-muted)]">{item.text}</p>
+      <section className="about section" id="sobre">
+        <div className="section-heading reveal">
+          <span className="section-heading__line" />
+          <h2>
+            {site.about.title}
+          </h2>
+          <p>
+            {site.about.text}
+          </p>
+        </div>
+
+        <div className="about__grid">
+          <article className="about__story reveal">
+            <h3>Receitas simples, preparo cuidadoso</h3>
+            <p>
+              {site.about.text}
+            </p>
+          </article>
+
+          <div className="feature-grid" aria-label="Diferenciais">
+            {site.differentials.map((item, index) => (
+              <article className="feature-card reveal" style={{ "--delay": String(80 + index * 60) + "ms" } as CSSProperties} key={item.title}>
+                <span className="feature-card__icon" aria-hidden="true">{item.code}</span>
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
               </article>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto w-[min(1120px,calc(100vw-40px))] scroll-mt-28 py-16" id="produtos">
-        <div className="mx-auto max-w-3xl text-center">
-          <span className="mx-auto block h-1 w-16 rounded-full bg-gradient-to-r from-[var(--site-primary)] to-[var(--site-primary-dark)]" />
-          <h2 className="mt-5 font-serif text-4xl font-black leading-tight tracking-tight text-[var(--site-text)] sm:text-5xl">
-              {site.productsTitle}
+      <section className="products section" id="produtos">
+        <div className="section-heading section-heading--center reveal">
+          <span className="section-heading__line" />
+          <h2>
+            {site.productsTitle}
           </h2>
-          <p className="mt-4 text-base leading-8 text-[var(--site-muted)]">{site.productsIntro}</p>
+          <p>
+            {site.productsIntro}
+          </p>
         </div>
 
-        <div className="mt-10 rounded-[1.4rem] border border-[var(--site-border)] bg-white/62 p-4 shadow-[var(--site-shadow)]">
-          <div className="flex flex-wrap justify-center gap-2" aria-label="Categorias">
+        <div className="menu-panel reveal" id="cardapio">
+          <div className="category-tabs" aria-label="Categorias do cardapio" data-category-tabs>
             {categories.map((category) => (
               <button
                 aria-pressed={selectedCategory === category}
-                className={
-                  "rounded-full px-4 py-2 text-sm font-black transition " +
-                  (selectedCategory === category
-                    ? "bg-[var(--site-text)] text-[var(--site-bg)]"
-                    : "bg-[var(--site-bg-soft)] text-[var(--site-muted)] hover:text-[var(--site-text)]")
-                }
+                className={selectedCategory === category ? "is-active" : ""}
                 key={category}
                 onClick={() => setSelectedCategory(category)}
                 type="button"
@@ -1557,17 +2254,29 @@ export function Features({ site, whatsappHref }: FeaturesProps) {
             ))}
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="product-grid" data-products-grid>
             {visibleProducts.map((product) => (
-              <article className="overflow-hidden rounded-[1.2rem] border border-[var(--site-border)] bg-white shadow-sm" key={product.name}>
-                <img alt={product.imageAlt} className="h-48 w-full object-cover" src={product.image} />
-                <div className="p-5">
-                  <span className="text-xs font-black uppercase tracking-[0.16em] text-[var(--site-primary)]">{product.category}</span>
-                  <div className="mt-3 flex items-start justify-between gap-3">
-                    <h3 className="text-lg font-black text-[var(--site-text)]">{product.name}</h3>
-                    <strong className="shrink-0 text-sm font-black text-[var(--site-primary-dark)]">{product.price}</strong>
+              <article className="product-card reveal" key={product.name}>
+                <div
+                  className="product-card__media"
+                  role="img"
+                  aria-label={product.imageAlt}
+                  style={{
+                    backgroundImage: "url('" + product.image + "')",
+                    backgroundPosition: "center",
+                    backgroundSize: "cover",
+                  }}
+                />
+                <div className="product-card__body">
+                  <span className="product-card__category">{product.category}</span>
+                  <div className="product-card__top">
+                    <h3>{product.name}</h3>
+                    <span className="product-card__price">{product.price}</span>
                   </div>
-                  <p className="mt-3 text-sm leading-7 text-[var(--site-muted)]">{product.description}</p>
+                  <p>{product.description}</p>
+                  <button className="product-card__cart" onClick={() => onAddToCart(product)} type="button">
+                    Adicionar ao carrinho
+                  </button>
                 </div>
               </article>
             ))}
@@ -1575,44 +2284,55 @@ export function Features({ site, whatsappHref }: FeaturesProps) {
         </div>
       </section>
 
-      <section className="mx-auto grid w-[min(1120px,calc(100vw-40px))] scroll-mt-28 items-center gap-8 py-16 lg:grid-cols-[1fr_0.82fr]" id="cardapio">
-        <div className="rounded-[2rem] bg-[var(--site-secondary)] p-8 text-white shadow-[var(--site-shadow)] sm:p-12">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-white/70">{site.promo.eyebrow}</p>
-            <h2 className="mt-4 font-serif text-4xl font-black leading-tight tracking-tight sm:text-5xl">{site.promo.title}</h2>
-            <p className="mt-5 max-w-2xl text-base leading-8 text-white/80">{site.promo.text}</p>
-            <div className="mt-6 grid gap-1">
-              <span className="text-xs font-bold uppercase tracking-[0.18em] text-white/60">{site.promo.metaLabel}</span>
-              <strong className="text-3xl font-black">{site.promo.price}</strong>
-            </div>
-            <a
-              className="mt-8 inline-flex min-h-12 items-center rounded-full bg-white px-7 text-sm font-black text-[var(--site-text)] transition hover:-translate-y-0.5"
-              href={whatsappHref}
-              rel={isExternalWhatsapp ? "noreferrer" : undefined}
-              target={isExternalWhatsapp ? "_blank" : undefined}
-            >
-              {site.promo.cta}
-            </a>
+      <section className="promo section" aria-label="Destaque">
+        <div className="promo__content reveal">
+          <h2>{site.promo.title}</h2>
+          <p>{site.promo.text}</p>
+          <div className="promo__meta">
+            <span>{site.promo.metaLabel}</span>
+            <strong>{site.promo.price}</strong>
+          </div>
+          <a
+            className="button button--primary"
+            href={whatsappHref}
+            rel={isExternalWhatsapp ? "noreferrer" : undefined}
+            target={isExternalWhatsapp ? "_blank" : undefined}
+          >
+            {site.promo.cta}
+          </a>
         </div>
-        <div className="overflow-hidden rounded-[2rem] shadow-[var(--site-shadow)]">
-          <img alt={site.images.promoAlt} className="h-[360px] w-full object-cover lg:h-[440px]" src={site.images.promo} />
+        <div className="promo__visual reveal" style={{ "--delay": "140ms" } as CSSProperties}>
+          <div
+            className="sprite-image sprite-image--combo"
+            aria-label={site.images.promoAlt}
+            style={{
+              backgroundImage: "url('" + site.images.promo + "')",
+              backgroundPosition: "center",
+              backgroundSize: "cover",
+            }}
+          />
         </div>
       </section>
 
-      <section className="mx-auto w-[min(1120px,calc(100vw-40px))] scroll-mt-28 py-16" id="depoimentos">
-        <div className="max-w-2xl">
-          <span className="block h-1 w-16 rounded-full bg-gradient-to-r from-[var(--site-primary)] to-[var(--site-primary-dark)]" />
-          <h2 className="mt-5 font-serif text-4xl font-black leading-tight tracking-tight text-[var(--site-text)] sm:text-5xl">
+      <section className="testimonials section" id="depoimentos">
+        <div className="section-heading reveal">
+          <span className="section-heading__line" />
+          <h2>
             {site.testimonialsTitle}
           </h2>
-          <p className="mt-4 text-base leading-8 text-[var(--site-muted)]">{site.testimonialsIntro}</p>
+          <p>
+            {site.testimonialsIntro}
+          </p>
         </div>
-        <div className="mt-8 grid gap-5 md:grid-cols-3">
-          {site.testimonials.map((testimonial) => (
-            <article className="rounded-[1.4rem] border border-[var(--site-border)] bg-white/78 p-6 shadow-[var(--site-shadow)]" key={testimonial.name}>
-              <p className="text-sm font-black text-[var(--site-primary)]">{testimonial.rating}</p>
-              <p className="mt-4 text-sm leading-7 text-[var(--site-muted)]">“{testimonial.comment}”</p>
-              <h3 className="mt-5 font-black text-[var(--site-text)]">{testimonial.name}</h3>
-              <span className="mt-1 block text-xs font-bold uppercase tracking-[0.14em] text-[var(--site-muted)]">{testimonial.role}</span>
+        <div className="testimonial-grid" data-testimonials-grid>
+          {site.testimonials.map((testimonial, index) => (
+            <article className="testimonial-card reveal" style={{ "--delay": String(index * 90) + "ms" } as CSSProperties} key={testimonial.name}>
+              <div className="testimonial-card__rating" aria-label="Avaliacao cinco estrelas">{testimonial.rating}</div>
+              <p>"{testimonial.comment}"</p>
+              <div className="testimonial-card__author">
+                <strong>{testimonial.name}</strong>
+                <span>{testimonial.role}</span>
+              </div>
             </article>
           ))}
         </div>
@@ -1624,7 +2344,8 @@ export function Features({ site, whatsappHref }: FeaturesProps) {
 }
 
 function buildGeneratedContactSectionSource(slug: string) {
-  return `import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
+  return `import type { CSSProperties } from "react";
+import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
 
 type ContactSectionProps = {
   site: GeneratedSiteConfig;
@@ -1635,31 +2356,35 @@ export function ContactSection({ site, whatsappHref }: ContactSectionProps) {
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
 
   return (
-    <section className="mx-auto grid w-[min(1120px,calc(100vw-40px))] scroll-mt-28 gap-8 py-16 lg:grid-cols-[0.95fr_1.05fr]" id="contato">
-      <div>
-        <span className="block h-1 w-16 rounded-full bg-gradient-to-r from-[var(--site-primary)] to-[var(--site-primary-dark)]" />
-        <h2 className="mt-5 font-serif text-4xl font-black leading-tight tracking-tight text-[var(--site-text)] sm:text-5xl">
+    <section className="contact section" id="contato">
+      <div className="contact__details reveal">
+        <div className="section-heading">
+          <span className="section-heading__line" />
+          <h2>
             {site.contactTitle}
           </h2>
-        <p className="mt-5 max-w-xl text-base leading-8 text-[var(--site-muted)]">{site.contactIntro}</p>
+          <p>
+            {site.contactIntro}
+          </p>
+        </div>
 
-        <div className="mt-7 grid gap-3">
-          <article className="rounded-[1.2rem] border border-[var(--site-border)] bg-white/76 p-5">
-            <strong className="block text-sm font-black text-[var(--site-text)]">Endereço</strong>
-            <span className="mt-1 block text-sm text-[var(--site-muted)]">{site.contact.address}</span>
+        <div className="contact-list">
+          <article>
+            <strong>Endereço</strong>
+            <span>{site.contact.address}</span>
           </article>
-          <article className="rounded-[1.2rem] border border-[var(--site-border)] bg-white/76 p-5">
-            <strong className="block text-sm font-black text-[var(--site-text)]">Horário</strong>
-            <span className="mt-1 block text-sm text-[var(--site-muted)]">{site.contact.hours}</span>
+          <article>
+            <strong>Horário</strong>
+            <span>{site.contact.hours}</span>
           </article>
-          <article className="rounded-[1.2rem] border border-[var(--site-border)] bg-white/76 p-5">
-            <strong className="block text-sm font-black text-[var(--site-text)]">Telefone / WhatsApp</strong>
-            <span className="mt-1 block text-sm text-[var(--site-muted)]">{site.contact.whatsapp}</span>
+          <article>
+            <strong>Telefone / WhatsApp</strong>
+            <span>{site.contact.whatsapp}</span>
           </article>
         </div>
 
         <a
-          className="mt-8 inline-flex min-h-12 items-center rounded-full bg-gradient-to-br from-[var(--site-primary)] to-[var(--site-primary-dark)] px-7 text-sm font-black text-white shadow-[var(--site-shadow)] transition hover:-translate-y-0.5"
+          className="button button--primary contact-whatsapp"
           href={whatsappHref}
           rel={isExternalWhatsapp ? "noreferrer" : undefined}
           target={isExternalWhatsapp ? "_blank" : undefined}
@@ -1668,14 +2393,10 @@ export function ContactSection({ site, whatsappHref }: ContactSectionProps) {
         </a>
       </div>
 
-      <div className="grid min-h-[360px] place-items-center rounded-[2rem] border border-[var(--site-border)] bg-[var(--site-bg-soft)] p-8 text-center shadow-[var(--site-shadow)]">
-        <div>
-          <div className="mx-auto mb-5 size-16 rounded-full border-[18px] border-[var(--site-primary)] bg-white shadow-[var(--site-shadow)]" />
-          <strong className="text-xl font-black text-[var(--site-text)]">Mapa da loja</strong>
-          <p className="mt-3 max-w-sm text-sm leading-7 text-[var(--site-muted)]">
-            Espaço reservado para incorporar Google Maps ou outro mapa do endereço.
-          </p>
-        </div>
+      <div className="map-card reveal" style={{ "--delay": "120ms" } as CSSProperties} aria-label="Espaco reservado para mapa">
+        <div className="map-card__pin" aria-hidden="true" />
+        <strong>Mapa da loja</strong>
+        <span>Espaço reservado para incorporação do mapa.</span>
       </div>
     </section>
   );
@@ -1688,28 +2409,24 @@ function buildGeneratedFooterSource(slug: string) {
 
 export function Footer({ site }: { site: GeneratedSiteConfig }) {
   return (
-    <footer className="border-t border-[var(--site-border)] bg-[var(--site-text)] px-4 py-10 text-[var(--site-bg)] sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col justify-between gap-8 md:flex-row md:items-center">
-        <div>
-          <p className="text-xl font-black">{site.name}</p>
-          <p className="mt-2 text-sm text-white/60">{site.brandTagline}</p>
-        </div>
-        <div className="flex flex-wrap gap-4 text-sm font-semibold text-white/70">
-          {site.navigation.map((item) => (
-            <a className="hover:text-white" href={item.href} key={item.href}>
-              {item.label}
-            </a>
-          ))}
-        </div>
-        <div className="flex gap-3 text-sm font-semibold text-white/70">
-          {site.social.map((item) => (
-            <a className="hover:text-white" href={item.href} key={item.label}>
-              {item.label}
-            </a>
-          ))}
-        </div>
+    <footer className="site-footer">
+      <div className="footer__brand">
+        <strong>{site.name}</strong>
+        <span>{site.brandTagline}</span>
       </div>
-      <p className="mx-auto mt-8 w-full max-w-7xl text-sm text-white/55">{site.footerText}</p>
+      <nav className="footer__links" aria-label="Links rapidos">
+        {site.navigation
+          .filter((item) => ["#inicio", "#sobre", "#produtos", "#contato"].includes(item.href))
+          .map((item) => (
+            <a href={item.href} key={item.href}>{item.label}</a>
+          ))}
+      </nav>
+      <div className="footer__social" aria-label="Redes sociais">
+        {site.social.map((item) => (
+          <a href={item.href} key={item.label} aria-label={item.label}>{item.label.slice(0, 2)}</a>
+        ))}
+      </div>
+      <p>{site.footerText}</p>
     </footer>
   );
 }
@@ -1753,7 +2470,7 @@ export function SiteEditor({ site, onUpdate }: SiteEditorProps) {
     <aside className="fixed bottom-4 right-4 z-50 max-h-[82vh] w-[min(380px,calc(100vw-2rem))] overflow-auto rounded-2xl border border-black/10 bg-white/95 p-4 shadow-2xl backdrop-blur">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[var(--site-primary)]">Editor</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-[var(--honey)]">Editor</p>
           <h2 className="text-lg font-black text-zinc-950">Textos, cores e imagens</h2>
         </div>
         <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-500">ao vivo</span>
@@ -2691,6 +3408,10 @@ function buildPreviewHtml(input: {
   brief?: ProjectBrief;
   editNotes: string[];
 }) {
+  if (input.name) {
+    return buildSiteReferencePreviewHtml(input);
+  }
+
   const isDashboard = input.kind === "dashboard" || input.kind === "saas";
   const escapedName = escapeHtml(input.name);
   const directives = extractPreviewDirectives(input.prompt);
@@ -3223,6 +3944,295 @@ function buildPreviewHtml(input: {
   </main>
 </body>
 </html>`;
+}
+
+function buildSiteReferencePreviewHtml(input: {
+  prompt: string;
+  name: string;
+  kind: BuilderProject["kind"];
+  industry: string;
+  features: string[];
+  palette: Palette;
+  brief?: ProjectBrief;
+}) {
+  const config = buildGeneratedConfig(input.name, input.kind, input.features, input.prompt, input.brief);
+  const directives = extractPreviewDirectives(input.prompt);
+  const media = applyMediaDirectives(getNicheMedia(input.industry), directives);
+  const contact = buildContact(input.brief);
+
+  if (directives.description) {
+    config.hero.subtitle = directives.description;
+  }
+
+  const imageTarget = directives.imageTarget;
+
+  if (imageTarget) {
+    config.images.promo = media.secondary;
+    config.products = config.products.map((product) => {
+      const label = normalize(product.name + " " + product.category + " " + product.description);
+      const shouldReplace =
+        imageTarget === "pao de queijo"
+          ? label.includes("queijo")
+          : label.includes(imageTarget);
+      return shouldReplace ? { ...product, image: media.secondary, imageAlt: media.secondaryAlt } : product;
+    });
+  }
+
+  const escapedName = escapeHtml(config.name);
+  const brandInitial = escapeHtml(config.name.trim().charAt(0).toUpperCase() || "Z");
+  const whatsappHref = buildPreviewWhatsappHref(config.contact.whatsapp, config.whatsappMessage, contact.primaryHref);
+  const isExternalWhatsapp = whatsappHref.startsWith("https://");
+  const titleStyle = directives.titleColor ? ` style="color:${escapeHtml(directives.titleColor)}"` : "";
+  const bodyStyle = buildPreviewVariableStyle(config.theme);
+  const navItems = config.navigation
+    .map((item) => `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`)
+    .join("");
+  const categoryTabs = ["Todos", ...config.categories]
+    .map(
+      (category, index) =>
+        `<button class="${index === 0 ? "is-active" : ""}" type="button" data-category="${escapeHtml(category)}" aria-pressed="${index === 0 ? "true" : "false"}">${escapeHtml(category)}</button>`,
+    )
+    .join("");
+  const productCards = config.products.map(buildPreviewProductCard).join("");
+  const featureCards = config.differentials
+    .map(
+      (item, index) =>
+        `<article class="feature-card reveal" style="--delay:${80 + index * 60}ms"><span class="feature-card__icon" aria-hidden="true">${escapeHtml(item.code)}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.text)}</p></article>`,
+    )
+    .join("");
+  const testimonials = config.testimonials
+    .map(
+      (testimonial, index) =>
+        `<article class="testimonial-card reveal" style="--delay:${index * 90}ms"><div class="testimonial-card__rating" aria-label="Avaliacao cinco estrelas">${escapeHtml(testimonial.rating)}</div><p>"${escapeHtml(testimonial.comment)}"</p><div class="testimonial-card__author"><strong>${escapeHtml(testimonial.name)}</strong><span>${escapeHtml(testimonial.role)}</span></div></article>`,
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="${escapedName} - site criado com a estrutura do zszoro/Site.git." />
+    <base href="about:srcdoc" />
+    <title>${escapedName}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet" />
+    <style>${buildSiteTemplateCss()}</style>
+  </head>
+  <body style="${bodyStyle}">
+    <header class="site-header" data-header>
+      <a class="brand" href="#inicio" aria-label="${escapedName}">
+        <span class="brand__mark" aria-hidden="true">${brandInitial}</span>
+        <span class="brand__text"><strong>${escapedName}</strong><small>${escapeHtml(config.brandTagline)}</small></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-label="Abrir menu" aria-expanded="false" data-nav-toggle><span></span><span></span><span></span></button>
+      <nav class="main-nav" aria-label="Menu principal" data-nav>${navItems}</nav>
+      <div class="header-actions">
+        <a class="header-cta" href="${escapeHtml(whatsappHref)}"${isExternalWhatsapp ? ' target="_blank" rel="noreferrer"' : ""}>${escapeHtml(config.headerCta)}</a>
+        <button class="login-cta" type="button" data-open-auth>Entrar</button>
+        <button class="cart-toggle" type="button" data-open-cart>Carrinho <span data-cart-count>0</span></button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero section" id="inicio">
+        <div class="hero__content reveal">
+          <h1${titleStyle}>${escapeHtml(config.hero.title)}</h1>
+          <p>${escapeHtml(config.hero.subtitle)}</p>
+          <div class="hero__actions" aria-label="Acoes principais">
+            <a class="button button--primary" href="${escapeHtml(whatsappHref)}"${isExternalWhatsapp ? ' target="_blank" rel="noreferrer"' : ""}>${escapeHtml(config.hero.primaryCta)}</a>
+            <a class="button button--secondary" href="#produtos">${escapeHtml(config.hero.secondaryCta)}</a>
+          </div>
+        </div>
+        <div class="hero__media reveal" style="--delay:120ms">
+          <img src="${escapeHtml(config.images.hero)}" alt="${escapeHtml(config.images.heroAlt)}" referrerpolicy="no-referrer" />
+          <div class="hero__note" aria-label="Informacao de destaque"><strong>${escapeHtml(config.hero.cardTitle)}</strong><span>${escapeHtml(config.hero.cardText)}</span></div>
+        </div>
+      </section>
+
+      <section class="about section" id="sobre">
+        <div class="section-heading reveal"><span class="section-heading__line"></span><h2>${escapeHtml(config.about.title)}</h2><p>${escapeHtml(config.about.text)}</p></div>
+        <div class="about__grid">
+          <article class="about__story reveal"><h3>Receitas simples, preparo cuidadoso</h3><p>${escapeHtml(config.about.text)}</p></article>
+          <div class="feature-grid" aria-label="Diferenciais">${featureCards}</div>
+        </div>
+      </section>
+
+      <section class="products section" id="produtos">
+        <div class="section-heading section-heading--center reveal"><span class="section-heading__line"></span><h2>${escapeHtml(config.productsTitle)}</h2><p>${escapeHtml(config.productsIntro)}</p></div>
+        <div class="menu-panel reveal" id="cardapio">
+          <div class="category-tabs" aria-label="Categorias do cardapio" data-category-tabs>${categoryTabs}</div>
+          <div class="product-grid" data-products-grid>${productCards}</div>
+        </div>
+      </section>
+
+      <section class="promo section" aria-label="Destaque">
+        <div class="promo__content reveal"><h2>${escapeHtml(config.promo.title)}</h2><p>${escapeHtml(config.promo.text)}</p><div class="promo__meta"><span>${escapeHtml(config.promo.metaLabel)}</span><strong>${escapeHtml(config.promo.price)}</strong></div><a class="button button--primary" href="${escapeHtml(whatsappHref)}"${isExternalWhatsapp ? ' target="_blank" rel="noreferrer"' : ""}>${escapeHtml(config.promo.cta)}</a></div>
+        <div class="promo__visual reveal" style="--delay:140ms"><div class="sprite-image sprite-image--combo" role="img" aria-label="${escapeHtml(config.images.promoAlt)}" style="background-image:url('${escapeHtml(config.images.promo)}');background-position:center;background-size:cover"></div></div>
+      </section>
+
+      <section class="testimonials section" id="depoimentos">
+        <div class="section-heading reveal"><span class="section-heading__line"></span><h2>${escapeHtml(config.testimonialsTitle)}</h2><p>${escapeHtml(config.testimonialsIntro)}</p></div>
+        <div class="testimonial-grid" data-testimonials-grid>${testimonials}</div>
+      </section>
+
+      <section class="contact section" id="contato">
+        <div class="contact__details reveal"><div class="section-heading"><span class="section-heading__line"></span><h2>${escapeHtml(config.contactTitle)}</h2><p>${escapeHtml(config.contactIntro)}</p></div><div class="contact-list"><article><strong>Endereço</strong><span>${escapeHtml(config.contact.address)}</span></article><article><strong>Horário</strong><span>${escapeHtml(config.contact.hours)}</span></article><article><strong>Telefone / WhatsApp</strong><span>${escapeHtml(config.contact.whatsapp)}</span></article></div></div>
+        <div class="map-card reveal" style="--delay:120ms" aria-label="Espaco reservado para mapa"><div class="map-card__pin" aria-hidden="true"></div><strong>Mapa da loja</strong><span>Espaço reservado para incorporação do mapa.</span></div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><div class="footer__brand"><strong>${escapedName}</strong><span>${escapeHtml(config.brandTagline)}</span></div><nav class="footer__links" aria-label="Links rapidos"><a href="#inicio">Início</a><a href="#sobre">Sobre</a><a href="#produtos">Produtos</a><a href="#contato">Contato</a></nav><div class="footer__social" aria-label="Redes sociais"><a href="#" aria-label="Instagram">Ig</a><a href="#" aria-label="Facebook">Fb</a><a href="#" aria-label="WhatsApp">Wa</a></div><p>${escapeHtml(config.footerText)}</p></footer>
+
+    <div class="auth-backdrop" hidden data-auth-modal><section class="auth-modal"><button class="modal-close" type="button" aria-label="Fechar login" data-close-auth>×</button><span class="section-heading__line"></span><h2 data-auth-title>Entrar em ${escapedName}</h2><p>Acesso preparado para clientes acompanharem pedidos, compras e agendamentos.</p><form data-auth-form><label data-name-field hidden>Nome<input name="name" placeholder="Seu nome" /></label><label>Email<input name="email" type="email" placeholder="voce@email.com" /></label><label>Senha<input name="password" type="password" placeholder="Minimo 6 caracteres" /></label><strong class="auth-status" data-auth-status></strong><button class="button button--primary" type="submit" data-auth-submit>Entrar</button></form><button class="auth-switch" type="button" data-auth-switch>Não tenho conta, cadastrar</button></section></div>
+    <aside class="cart-drawer" hidden data-cart-drawer><button class="modal-close" type="button" aria-label="Fechar carrinho" data-close-cart>×</button><span class="section-heading__line"></span><h2>Carrinho</h2><div class="cart-list" data-cart-list><p>Adicione produtos para montar o pedido.</p></div></aside>
+    <script>${buildPreviewTemplateScript(config, whatsappHref)}</script>
+  </body>
+</html>`;
+}
+
+function buildPreviewVariableStyle(theme: ReturnType<typeof buildTemplateTheme>) {
+  return [
+    ["--cream", theme.background],
+    ["--cream-strong", theme.backgroundSoft],
+    ["--white", theme.card],
+    ["--honey", theme.primary],
+    ["--honey-dark", theme.primaryDark],
+    ["--terracotta", theme.primaryDark],
+    ["--brown", theme.text],
+    ["--brown-soft", theme.muted],
+    ["--border", theme.border],
+    ["--shadow", theme.shadow],
+  ]
+    .map(([key, value]) => `${key}:${escapeHtml(value)}`)
+    .join(";");
+}
+
+function buildPreviewWhatsappHref(phone: string, message: string, fallback: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 10) return fallback || "#contato";
+  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+}
+
+function buildPreviewProductCard(product: ReturnType<typeof buildGeneratedConfig>["products"][number]) {
+  return `<article class="product-card reveal" data-product-card data-category="${escapeHtml(product.category)}"><div class="product-card__media" style="background-image:url('${escapeHtml(product.image)}');background-position:center;background-size:cover" role="img" aria-label="${escapeHtml(product.imageAlt)}"></div><div class="product-card__body"><span class="product-card__category">${escapeHtml(product.category)}</span><div class="product-card__top"><h3>${escapeHtml(product.name)}</h3><span class="product-card__price">${escapeHtml(product.price)}</span></div><p>${escapeHtml(product.description)}</p><button class="product-card__cart" type="button" data-add-cart="${escapeHtml(product.name)}">Adicionar ao carrinho</button></div></article>`;
+}
+
+function buildPreviewTemplateScript(config: ReturnType<typeof buildGeneratedConfig>, whatsappHref: string) {
+  const productsJson = JSON.stringify(config.products).replace(/</g, "\\u003c");
+  const siteName = JSON.stringify(config.name);
+  return `
+const products = ${productsJson};
+const siteName = ${siteName};
+const baseWhatsappHref = ${JSON.stringify(whatsappHref)};
+let selectedCategory = "Todos";
+let cart = [];
+let authMode = "login";
+function priceToNumber(price) {
+  const normalized = String(price).replace(/[^\\d,.-]/g, "").replace(/\\.(?=\\d{3})/g, "").replace(",", ".");
+  const value = Number.parseFloat(normalized);
+  return Number.isFinite(value) ? value : 0;
+}
+function formatCurrency(value) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+function renderProducts() {
+  document.querySelectorAll("[data-product-card]").forEach((card) => {
+    card.hidden = selectedCategory !== "Todos" && card.dataset.category !== selectedCategory;
+  });
+}
+function renderCategories() {
+  document.querySelectorAll("[data-category]").forEach((button) => {
+    const active = button.dataset.category === selectedCategory;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+function renderCart() {
+  const count = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const total = cart.reduce((sum, item) => sum + priceToNumber(item.product.price) * item.quantity, 0);
+  const countEl = document.querySelector("[data-cart-count]");
+  const list = document.querySelector("[data-cart-list]");
+  if (countEl) countEl.textContent = String(count);
+  if (!list) return;
+  if (!cart.length) {
+    list.innerHTML = "<p>Adicione produtos para montar o pedido.</p>";
+    return;
+  }
+  list.innerHTML = cart.map((item) => '<article class="cart-item"><div><strong>' + item.product.name + '</strong><span>' + item.product.price + '</span></div><div class="cart-controls"><button type="button" data-dec="' + item.product.name + '">-</button><span>' + item.quantity + '</span><button type="button" data-inc="' + item.product.name + '">+</button></div></article>').join("") + '<div class="cart-total"><span>Total</span><strong>' + formatCurrency(total) + '</strong></div><a class="button button--primary" target="_blank" rel="noreferrer" href="' + buildCheckoutHref(total) + '">Finalizar pedido</a>';
+}
+function buildCheckoutHref(total) {
+  if (!baseWhatsappHref.startsWith("https://wa.me/") || !cart.length) return baseWhatsappHref;
+  const lines = cart.map((item) => "- " + item.quantity + "x " + item.product.name + " (" + item.product.price + ")");
+  const phone = baseWhatsappHref.split("/wa.me/")[1]?.split("?")[0] || "";
+  const text = ["Olá, vim pelo site da " + siteName + " e quero finalizar este pedido:", ...lines, "Total aproximado: " + formatCurrency(total)].join("\\n");
+  return "https://wa.me/" + phone + "?text=" + encodeURIComponent(text);
+}
+function addToCart(productName) {
+  const product = products.find((item) => item.name === productName);
+  if (!product) return;
+  const existing = cart.find((item) => item.product.name === productName);
+  if (existing) existing.quantity += 1;
+  else cart.push({ product, quantity: 1 });
+  document.querySelector("[data-cart-drawer]").hidden = false;
+  renderCart();
+}
+function setAuthMode(nextMode) {
+  authMode = nextMode;
+  const register = authMode === "register";
+  document.querySelector("[data-auth-title]").textContent = register ? "Criar conta" : "Entrar em " + siteName;
+  document.querySelector("[data-auth-submit]").textContent = register ? "Cadastrar" : "Entrar";
+  document.querySelector("[data-auth-switch]").textContent = register ? "Já tenho conta, entrar" : "Não tenho conta, cadastrar";
+  document.querySelector("[data-name-field]").hidden = !register;
+}
+function setupNavigation() {
+  const nav = document.querySelector("[data-nav]");
+  const toggle = document.querySelector("[data-nav-toggle]");
+  if (!nav || !toggle) return;
+  const closeMenu = () => {
+    nav.classList.remove("is-open");
+    toggle.classList.remove("is-active");
+    toggle.setAttribute("aria-expanded", "false");
+    document.body.classList.remove("nav-open");
+  };
+  toggle.addEventListener("click", () => {
+    const isOpen = nav.classList.toggle("is-open");
+    toggle.classList.toggle("is-active", isOpen);
+    toggle.setAttribute("aria-expanded", String(isOpen));
+    document.body.classList.toggle("nav-open", isOpen);
+  });
+  nav.addEventListener("click", (event) => { if (event.target.closest("a")) closeMenu(); });
+  window.addEventListener("keydown", (event) => { if (event.key === "Escape") closeMenu(); });
+}
+document.addEventListener("click", (event) => {
+  const category = event.target.closest("[data-category]");
+  if (category) { selectedCategory = category.dataset.category; renderCategories(); renderProducts(); return; }
+  const add = event.target.closest("[data-add-cart]");
+  if (add) { addToCart(add.dataset.addCart); return; }
+  const inc = event.target.closest("[data-inc]");
+  if (inc) { const item = cart.find((entry) => entry.product.name === inc.dataset.inc); if (item) item.quantity += 1; renderCart(); return; }
+  const dec = event.target.closest("[data-dec]");
+  if (dec) { cart = cart.map((item) => item.product.name === dec.dataset.dec ? { ...item, quantity: item.quantity - 1 } : item).filter((item) => item.quantity > 0); renderCart(); return; }
+  if (event.target.closest("[data-open-cart]")) { document.querySelector("[data-cart-drawer]").hidden = false; renderCart(); return; }
+  if (event.target.closest("[data-close-cart]")) { document.querySelector("[data-cart-drawer]").hidden = true; return; }
+  if (event.target.closest("[data-open-auth]")) { document.querySelector("[data-auth-modal]").hidden = false; setAuthMode("login"); return; }
+  if (event.target.closest("[data-close-auth]")) { document.querySelector("[data-auth-modal]").hidden = true; return; }
+  if (event.target.closest("[data-auth-switch]")) { setAuthMode(authMode === "login" ? "register" : "login"); return; }
+});
+document.addEventListener("submit", (event) => {
+  if (!event.target.matches("[data-auth-form]")) return;
+  event.preventDefault();
+  const form = new FormData(event.target);
+  const email = String(form.get("email") || "");
+  const password = String(form.get("password") || "");
+  const name = String(form.get("name") || "");
+  const valid = email.includes("@") && password.length >= 6 && (authMode === "login" || name.trim().length >= 2);
+  document.querySelector("[data-auth-status]").textContent = valid ? (authMode === "login" ? "Login pronto para conectar ao backend." : "Cadastro pronto para conectar ao backend.") : "Preencha os dados corretamente.";
+});
+setupNavigation();
+renderProducts();
+renderCart();`;
 }
 
 function buildPreviewHighlights(industry: string) {

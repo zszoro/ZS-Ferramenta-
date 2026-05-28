@@ -21,6 +21,7 @@ import {
   LogOut,
   Maximize2,
   Monitor,
+  MousePointer2,
   MoveHorizontal,
   Palette,
   RefreshCw,
@@ -202,6 +203,7 @@ export function AiBuilderApp() {
   const [createdPanelOpen, setCreatedPanelOpen] = useState(true);
   const [copied, setCopied] = useState(false);
   const [selectedPreviewElement, setSelectedPreviewElement] = useState<PreviewSelection | null>(null);
+  const [isPreviewSelectionMode, setIsPreviewSelectionMode] = useState(false);
 
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [tokensModalOpen, setTokensModalOpen] = useState(false);
@@ -215,7 +217,10 @@ export function AiBuilderApp() {
     () => project?.previewHtml ?? emptyPreview(account?.name ?? "zs"),
     [account?.name, project],
   );
-  const inspectablePreviewHtml = useMemo(() => withPreviewInspector(previewHtml), [previewHtml]);
+  const inspectablePreviewHtml = useMemo(
+    () => (isPreviewSelectionMode ? withPreviewInspector(previewHtml) : previewHtml),
+    [isPreviewSelectionMode, previewHtml],
+  );
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -314,6 +319,13 @@ export function AiBuilderApp() {
     }
     setScreen("app");
     setOnboardingIndex(0);
+  }
+
+  function togglePreviewSelectionMode(enabled: boolean) {
+    setIsPreviewSelectionMode(enabled);
+    if (!enabled) {
+      setSelectedPreviewElement(null);
+    }
   }
 
   async function handleSend(event?: FormEvent<HTMLFormElement>) {
@@ -748,12 +760,14 @@ export function AiBuilderApp() {
           <PreviewPanel
             copied={copied}
             html={inspectablePreviewHtml}
+            isSelectionMode={isPreviewSelectionMode}
             mode={previewMode}
             project={project}
             onCopy={copyHtml}
             onExport={exportZip}
             onFullscreen={() => setIsPreviewFullscreen(true)}
             onModeChange={setPreviewMode}
+            onSelectionModeChange={togglePreviewSelectionMode}
           />
         </aside>
       </div>
@@ -765,9 +779,11 @@ export function AiBuilderApp() {
       {isPreviewFullscreen && (
         <FullscreenPreview
           html={inspectablePreviewHtml}
+          isSelectionMode={isPreviewSelectionMode}
           mode={previewMode}
           project={project}
           onClose={() => setIsPreviewFullscreen(false)}
+          onSelectionModeChange={togglePreviewSelectionMode}
         />
       )}
 
@@ -1274,12 +1290,14 @@ function ChatBubble(props: { message: ChatMessage; compact: boolean }) {
 function PreviewPanel(props: {
   copied: boolean;
   html: string;
+  isSelectionMode: boolean;
   mode: "desktop" | "mobile";
   project: BuilderProject | null;
   onCopy: () => void;
   onExport: () => void;
   onFullscreen: () => void;
   onModeChange: (mode: "desktop" | "mobile") => void;
+  onSelectionModeChange: (enabled: boolean) => void;
 }) {
   return (
     <>
@@ -1292,6 +1310,20 @@ function PreviewPanel(props: {
         </div>
 
         <div className="flex items-center gap-1">
+          <button
+            className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-xs font-black transition disabled:opacity-40 ${
+              props.isSelectionMode
+                ? "border-[#7cff6b]/60 bg-[#7cff6b] text-black"
+                : "border-white/10 text-zinc-300 hover:border-[#7cff6b]/50 hover:text-white"
+            }`}
+            disabled={!props.project}
+            onClick={() => props.onSelectionModeChange(!props.isSelectionMode)}
+            title={props.isSelectionMode ? "Sair da selecao de componente" : "Selecionar componente no preview"}
+            type="button"
+          >
+            <MousePointer2 className="h-4 w-4" aria-hidden="true" />
+            Selecionar
+          </button>
           <button
             className={`grid h-9 w-9 place-items-center rounded-md border text-zinc-300 transition ${
               props.mode === "desktop" ? "border-[#7cff6b]/50 bg-[#7cff6b]/10" : "border-white/10"
@@ -1346,7 +1378,7 @@ function PreviewPanel(props: {
           className={`mx-auto h-full rounded-xl border border-white/10 bg-white shadow-2xl transition-all ${
             props.mode === "mobile" ? "w-[390px] max-w-full" : "w-full"
           }`}
-          sandbox="allow-scripts"
+          sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
           srcDoc={props.html}
           title="Preview gerado pela IA"
         />
@@ -1385,9 +1417,11 @@ function CreatedFloatingPanel(props: { project: BuilderProject; onClose: () => v
 
 function FullscreenPreview(props: {
   html: string;
+  isSelectionMode: boolean;
   mode: "desktop" | "mobile";
   project: BuilderProject | null;
   onClose: () => void;
+  onSelectionModeChange: (enabled: boolean) => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#050705] text-white">
@@ -1396,21 +1430,36 @@ function FullscreenPreview(props: {
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">Tela cheia</p>
           <h2 className="text-sm font-semibold">{props.project?.name ?? "Preview"}</h2>
         </div>
-        <button
-          className="grid h-10 w-10 place-items-center rounded-full bg-zinc-800 text-zinc-300 transition hover:bg-zinc-700 hover:text-white"
-          onClick={props.onClose}
-          type="button"
-        >
-          <X className="h-5 w-5" aria-hidden="true" />
-          <span className="sr-only">Sair da tela cheia</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className={`inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-xs font-black transition ${
+              props.isSelectionMode
+                ? "border-[#7cff6b]/60 bg-[#7cff6b] text-black"
+                : "border-white/10 text-zinc-300 hover:border-[#7cff6b]/50 hover:text-white"
+            }`}
+            disabled={!props.project}
+            onClick={() => props.onSelectionModeChange(!props.isSelectionMode)}
+            type="button"
+          >
+            <MousePointer2 className="h-4 w-4" aria-hidden="true" />
+            Selecionar
+          </button>
+          <button
+            className="grid h-10 w-10 place-items-center rounded-full bg-zinc-800 text-zinc-300 transition hover:bg-zinc-700 hover:text-white"
+            onClick={props.onClose}
+            type="button"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+            <span className="sr-only">Sair da tela cheia</span>
+          </button>
+        </div>
       </header>
       <div className="min-h-0 flex-1 overflow-hidden bg-[#111811] p-5">
         <iframe
           className={`mx-auto h-full rounded-xl border border-white/10 bg-white shadow-2xl ${
             props.mode === "mobile" ? "w-[390px] max-w-full" : "w-full"
           }`}
-          sandbox="allow-scripts"
+          sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
           srcDoc={props.html}
           title="Preview em tela cheia"
         />
