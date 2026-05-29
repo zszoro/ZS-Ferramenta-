@@ -1,11 +1,12 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { ChangeEvent, ClipboardEvent, CSSProperties, ReactNode } from "react";
 import {
   ArrowDownToLine,
   Bell,
   Bot,
+  Brain,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -15,6 +16,7 @@ import {
   Eye,
   EyeOff,
   FileText,
+  ImagePlus,
   KeyRound,
   LoaderCircle,
   LogIn,
@@ -24,12 +26,15 @@ import {
   MousePointer2,
   MoveHorizontal,
   Palette,
+  Paperclip,
   RefreshCw,
+  ScanEye,
   Send,
   Settings,
   ShieldCheck,
   Smartphone,
   Sparkles,
+  Trash2,
   User,
   UserPlus,
   X,
@@ -39,6 +44,7 @@ import type {
   BuilderProject,
   ProjectBrief,
 } from "@/lib/ai-builder/generator";
+import type { BuilderImageAttachment, VisionAnalysis } from "@/lib/ai-builder/vision";
 
 type Screen = "landing" | "onboarding" | "app";
 type AuthMode = "login" | "register";
@@ -48,6 +54,8 @@ type ChatMessage = {
   id: string;
   role: MessageRole;
   text: string;
+  attachments?: BuilderImageAttachment[];
+  vision?: VisionAnalysis | null;
   files?: BuilderProject["files"];
 };
 
@@ -104,6 +112,9 @@ type Plan = {
 const ACCOUNTS_KEY = "zs-ferramenta-accounts-v3";
 const ACTIVE_ACCOUNT_KEY = "zs-ferramenta-active-account-v3";
 const ONBOARDING_KEY = "zs-ferramenta-onboarding-v3";
+const MAX_CHAT_IMAGES = 3;
+const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_CHAT_IMAGE_DIMENSION = 1600;
 
 const defaultSettings: AccountSettings = {
   language: "pt-BR",
@@ -193,6 +204,8 @@ export function AiBuilderApp() {
 
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
+  const [attachedImages, setAttachedImages] = useState<BuilderImageAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [project, setProject] = useState<BuilderProject | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -212,6 +225,7 @@ export function AiBuilderApp() {
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const previewHtml = useMemo(
     () => project?.previewHtml ?? emptyPreview(account?.name ?? "zs"),
@@ -331,7 +345,10 @@ export function AiBuilderApp() {
   async function handleSend(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
 
-    const message = input.trim();
+    const imagesForRequest = attachedImages;
+    const message =
+      input.trim() ||
+      (imagesForRequest.length ? "Analise a imagem anexada e diga como ela pode ajudar no site." : "");
     if (!message || isSending || !account) return;
 
     if (account.tokens.remaining <= 0) {
@@ -344,6 +361,7 @@ export function AiBuilderApp() {
       id: `user-${Date.now()}`,
       role: "user",
       text: message,
+      attachments: imagesForRequest,
     };
     const messageForAi = selectedPreviewElement
       ? [
@@ -353,6 +371,8 @@ export function AiBuilderApp() {
       : message;
 
     setInput("");
+    setAttachedImages([]);
+    setAttachmentError(null);
     setChatError(null);
     setIsSending(true);
     setMessages((current) => [...current, userMessage]);
@@ -361,7 +381,7 @@ export function AiBuilderApp() {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: messageForAi, project }),
+        body: JSON.stringify({ message: messageForAi, project, attachments: imagesForRequest }),
       });
       const payload = (await response.json()) as
         | ({ ok: true } & BuilderAssistantResponse)
@@ -387,10 +407,12 @@ export function AiBuilderApp() {
           id: `assistant-${Date.now()}`,
           role: "assistant",
           text: payload.reply,
+          vision: payload.vision,
           files: payload.project?.files,
         },
       ]);
     } catch (caught) {
+      setAttachedImages(imagesForRequest);
       setChatError(caught instanceof Error ? caught.message : "Erro inesperado.");
       setMessages((current) => [
         ...current,
@@ -407,6 +429,7 @@ export function AiBuilderApp() {
 
   async function handleCreateProject(brief: ProjectBrief) {
     if (isSending || !account) return;
+    const imagesForRequest = attachedImages;
 
     if (account.tokens.remaining <= 0) {
       setProjectBriefOpen(false);
@@ -427,6 +450,8 @@ export function AiBuilderApp() {
 
     setProjectBriefOpen(false);
     setInput("");
+    setAttachedImages([]);
+    setAttachmentError(null);
     setChatError(null);
     setIsSending(true);
     setMessages((current) => [
@@ -435,6 +460,7 @@ export function AiBuilderApp() {
         id: `user-project-${Date.now()}`,
         role: "user",
         text: message,
+        attachments: imagesForRequest,
       },
     ]);
 
@@ -442,7 +468,7 @@ export function AiBuilderApp() {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, project, brief }),
+        body: JSON.stringify({ message, project, brief, attachments: imagesForRequest }),
       });
       const payload = (await response.json()) as
         | ({ ok: true } & BuilderAssistantResponse)
@@ -466,10 +492,12 @@ export function AiBuilderApp() {
           id: `assistant-project-${Date.now()}`,
           role: "assistant",
           text: payload.reply,
+          vision: payload.vision,
           files: payload.project?.files,
         },
       ]);
     } catch (caught) {
+      setAttachedImages(imagesForRequest);
       setChatError(caught instanceof Error ? caught.message : "Erro inesperado.");
       setMessages((current) => [
         ...current,
@@ -484,6 +512,48 @@ export function AiBuilderApp() {
     }
   }
 
+  async function addImageFiles(files: File[]) {
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+
+    const availableSlots = MAX_CHAT_IMAGES - attachedImages.length;
+    if (availableSlots <= 0) {
+      setAttachmentError(`Voce pode anexar ate ${MAX_CHAT_IMAGES} imagens por mensagem.`);
+      return;
+    }
+
+    const nextImages: BuilderImageAttachment[] = [];
+
+    try {
+      for (const file of imageFiles.slice(0, availableSlots)) {
+        nextImages.push(await normalizeImageAttachment(file));
+      }
+      setAttachedImages((current) => [...current, ...nextImages].slice(0, MAX_CHAT_IMAGES));
+      setAttachmentError(null);
+    } catch (caught) {
+      setAttachmentError(caught instanceof Error ? caught.message : "Nao consegui anexar essa imagem.");
+    }
+  }
+
+  function handleImageInputChange(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    void addImageFiles(files);
+  }
+
+  function handleComposerPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+    if (!files.length) return;
+
+    event.preventDefault();
+    void addImageFiles(files);
+  }
+
+  function removeAttachedImage(id: string) {
+    setAttachedImages((current) => current.filter((image) => image.id !== id));
+    setAttachmentError(null);
+  }
+
   function applyPrompt(prompt: string) {
     setInput(prompt);
   }
@@ -493,6 +563,8 @@ export function AiBuilderApp() {
     setMessages(initialMessages);
     setCreatedPanelOpen(true);
     setChatError(null);
+    setAttachedImages([]);
+    setAttachmentError(null);
   }
 
   async function copyHtml() {
@@ -687,7 +759,70 @@ export function AiBuilderApp() {
                 </div>
               )}
 
-              <form className="grid grid-cols-[1fr_auto] gap-2" onSubmit={handleSend}>
+              {attachedImages.length > 0 && (
+                <div className="mb-3 grid gap-2 rounded-xl border border-[#7cff6b]/25 bg-[#7cff6b]/10 p-3">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-[#d8ff76]">
+                    <ScanEye className="h-4 w-4" aria-hidden="true" />
+                    Vision Agent pronto
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {attachedImages.map((image) => (
+                      <div
+                        className="grid grid-cols-[56px_1fr_auto] items-center gap-3 rounded-lg border border-white/10 bg-black/30 p-2"
+                        key={image.id}
+                      >
+                        <span
+                          aria-label={image.name}
+                          className="h-14 w-14 rounded-md bg-cover bg-center"
+                          role="img"
+                          style={{ backgroundImage: `url("${image.dataUrl}")` }}
+                        />
+                        <span className="min-w-0">
+                          <strong className="block truncate text-xs text-white">{image.name}</strong>
+                          <span className="text-[11px] text-zinc-500">
+                            {image.width && image.height ? `${image.width}x${image.height} - ` : ""}
+                            {formatBytes(image.size)}
+                          </span>
+                        </span>
+                        <button
+                          className="grid h-8 w-8 place-items-center rounded-md border border-white/10 text-zinc-400 transition hover:border-red-400/50 hover:text-red-100"
+                          onClick={() => removeAttachedImage(image.id)}
+                          title="Remover imagem"
+                          type="button"
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {attachmentError && (
+                <div className="mb-3 rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-100">
+                  {attachmentError}
+                </div>
+              )}
+
+              <form className="grid grid-cols-[auto_1fr_auto] gap-2" onSubmit={handleSend}>
+                <input
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  multiple
+                  onChange={handleImageInputChange}
+                  ref={imageInputRef}
+                  type="file"
+                />
+                <button
+                  className="inline-flex h-14 min-w-14 items-center justify-center rounded-xl border border-white/10 bg-black/40 text-zinc-300 transition hover:border-[#7cff6b]/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={isSending || attachedImages.length >= MAX_CHAT_IMAGES}
+                  onClick={() => imageInputRef.current?.click()}
+                  title="Anexar print ou imagem"
+                  type="button"
+                >
+                  <Paperclip className="h-5 w-5" aria-hidden="true" />
+                  <span className="sr-only">Anexar print ou imagem</span>
+                </button>
                 <label className="block">
                   <span className="sr-only">Mensagem para IA</span>
                   <textarea
@@ -699,21 +834,26 @@ export function AiBuilderApp() {
                         void handleSend();
                       }
                     }}
+                    onPaste={handleComposerPaste}
                     placeholder={
-                      selectedPreviewElement
-                        ? "Diga o que mudar no item selecionado..."
-                        : "Peça para criar ou editar. Ex.: troque o título por Barbearia Elite..."
+                      attachedImages.length
+                        ? "Ex.: coloque essa imagem no hero, use o print como referencia visual..."
+                        : selectedPreviewElement
+                          ? "Diga o que mudar no item selecionado..."
+                          : "Peca para criar ou editar. Ex.: troque o titulo por Barbearia Elite..."
                     }
                     value={input}
                   />
                 </label>
                 <button
                   className="inline-flex h-14 min-w-14 items-center justify-center rounded-xl bg-[#7cff6b] px-4 text-sm font-black text-black transition hover:bg-[#d8ff76] disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={isSending || !input.trim()}
+                  disabled={isSending || (!input.trim() && attachedImages.length === 0)}
                   type="submit"
                 >
                   {isSending ? (
                     <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+                  ) : attachedImages.length ? (
+                    <ImagePlus className="h-5 w-5" aria-hidden="true" />
                   ) : (
                     <Send className="h-5 w-5" aria-hidden="true" />
                   )}
@@ -787,7 +927,7 @@ export function AiBuilderApp() {
         />
       )}
 
-      {account && tokensModalOpen && (
+      {tokensModalOpen && account && (
         <TokensModal
           account={account}
           billingMessage={billingMessage}
@@ -799,7 +939,7 @@ export function AiBuilderApp() {
         />
       )}
 
-      {account && settingsOpen && (
+      {settingsOpen && account && (
         <SettingsModal
           account={account}
           onClose={() => setSettingsOpen(false)}
@@ -811,7 +951,7 @@ export function AiBuilderApp() {
         />
       )}
 
-      {account && projectBriefOpen && (
+      {projectBriefOpen && (
         <CreateProjectModal
           onClose={() => setProjectBriefOpen(false)}
           onCreate={(brief) => void handleCreateProject(brief)}
@@ -1261,6 +1401,43 @@ function ChatBubble(props: { message: ChatMessage; compact: boolean }) {
         {isAssistant ? "IA ZS" : "Voce"}
       </div>
       <p className="whitespace-pre-line text-sm leading-7 text-zinc-100">{props.message.text}</p>
+
+      {props.message.attachments && props.message.attachments.length > 0 && (
+        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          {props.message.attachments.map((image) => (
+            <div
+              className="overflow-hidden rounded-lg border border-white/10 bg-black/25"
+              key={image.id}
+            >
+              <span
+                aria-label={image.name}
+                className="block aspect-[4/3] bg-cover bg-center"
+                role="img"
+                style={{ backgroundImage: `url("${image.dataUrl}")` }}
+              />
+              <div className="p-2">
+                <strong className="block truncate text-xs text-white">{image.name}</strong>
+                <span className="text-[11px] text-zinc-500">{formatBytes(image.size)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {props.message.vision && (
+        <div className="mt-4 rounded-lg border border-[#7cff6b]/25 bg-black/25 p-3">
+          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-[#d8ff76]">
+            <Brain className="h-4 w-4" aria-hidden="true" />
+            Vision Agent
+          </div>
+          <p className="text-xs leading-5 text-zinc-300">{props.message.vision.summary}</p>
+          <p className="mt-2 text-[11px] text-zinc-500">
+            {props.message.vision.source === "openai" ? "Analise visual real" : "Analise local"}
+            {" - "}
+            {props.message.vision.shouldApplyToPreview ? "aplicado ao preview" : "sem alterar preview"}
+          </p>
+        </div>
+      )}
 
       {props.message.files && props.message.files.length > 0 && (
         <div className="mt-4 grid gap-2">
@@ -2030,6 +2207,105 @@ function copyWithTextarea(value: string) {
   textarea.select();
   document.execCommand("copy");
   textarea.remove();
+}
+
+async function normalizeImageAttachment(file: File): Promise<BuilderImageAttachment> {
+  if (!["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)) {
+    throw new Error("Use PNG, JPG, WEBP ou GIF nao animado.");
+  }
+
+  if (file.size > MAX_CHAT_IMAGE_BYTES * 2) {
+    throw new Error("Imagem muito pesada. Use uma imagem ate 16 MB para compactar no chat.");
+  }
+
+  const originalDataUrl = await readFileAsDataUrl(file);
+  const dimensions = await readImageDimensions(originalDataUrl);
+  const shouldResize =
+    file.type !== "image/gif" &&
+    (file.size > MAX_CHAT_IMAGE_BYTES ||
+      Math.max(dimensions.width, dimensions.height) > MAX_CHAT_IMAGE_DIMENSION);
+  const dataUrl = shouldResize
+    ? await resizeImageDataUrl(originalDataUrl, dimensions.width, dimensions.height)
+    : originalDataUrl;
+  const size = dataUrlByteSize(dataUrl);
+
+  if (size > MAX_CHAT_IMAGE_BYTES) {
+    throw new Error("Nao consegui reduzir a imagem para menos de 8 MB.");
+  }
+
+  return {
+    id: `img-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    name: file.name || "imagem",
+    mimeType: dataUrlMimeType(dataUrl),
+    size,
+    dataUrl,
+    width: dimensions.width,
+    height: dimensions.height,
+  };
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => (typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Imagem invalida.")));
+    reader.onerror = () => reject(new Error("Nao consegui ler a imagem."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function readImageDimensions(dataUrl: string) {
+  return new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const image = new window.Image();
+    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => reject(new Error("Nao consegui validar a imagem."));
+    image.src = dataUrl;
+  });
+}
+
+function resizeImageDataUrl(dataUrl: string, width: number, height: number) {
+  const ratio = Math.min(1, MAX_CHAT_IMAGE_DIMENSION / Math.max(width, height));
+  const nextWidth = Math.max(1, Math.round(width * ratio));
+  const nextHeight = Math.max(1, Math.round(height * ratio));
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) throw new Error("Nao consegui compactar a imagem no navegador.");
+
+  canvas.width = nextWidth;
+  canvas.height = nextHeight;
+
+  return new Promise<string>((resolve, reject) => {
+    const image = new window.Image();
+    image.onload = () => {
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, nextWidth, nextHeight);
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
+      context.drawImage(image, 0, 0, nextWidth, nextHeight);
+      const webp = canvas.toDataURL("image/webp", 0.86);
+      resolve(webp.startsWith("data:image/webp") ? webp : canvas.toDataURL("image/jpeg", 0.88));
+    };
+    image.onerror = () => reject(new Error("Nao consegui compactar a imagem."));
+    image.src = dataUrl;
+  });
+}
+
+function dataUrlByteSize(value: string) {
+  const base64 = value.split(",", 2)[1]?.replace(/\s/g, "") ?? "";
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
+function dataUrlMimeType(value: string): BuilderImageAttachment["mimeType"] {
+  if (value.startsWith("data:image/png")) return "image/png";
+  if (value.startsWith("data:image/webp")) return "image/webp";
+  if (value.startsWith("data:image/gif")) return "image/gif";
+  return "image/jpeg";
+}
+
+function formatBytes(value: number) {
+  if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function withPreviewInspector(html: string) {

@@ -1,4 +1,5 @@
 import { buildAugmentedPrompt, getReusableTemplateFiles } from "./context";
+import type { BuilderImageAttachment, VisionAnalysis, VisionContext, VisionTarget } from "./vision";
 
 export type BuilderFile = {
   path: string;
@@ -28,15 +29,27 @@ export type BuilderProject = {
   steps: string[];
   features: string[];
   files: BuilderFile[];
+  visionReferences?: BuilderVisionReference[];
   editCount: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type BuilderVisionReference = BuilderImageAttachment & {
+  target: Exclude<VisionTarget, "none">;
+  summary: string;
+  layout: string;
+  visualPrompt: string;
+  colors: string[];
+  source: VisionAnalysis["source"];
+  createdAt: string;
 };
 
 export type BuilderAssistantResponse = {
   mode: "chat" | "create" | "edit";
   reply: string;
   project?: BuilderProject;
+  vision?: VisionAnalysis | null;
   suggestions: string[];
   tokenCost: number;
 };
@@ -115,24 +128,34 @@ export function respondToBuilderMessage(input: {
   message: string;
   project?: BuilderProject | null;
   brief?: ProjectBrief | null;
+  vision?: VisionContext | null;
 }): BuilderAssistantResponse {
   const message = input.message.trim();
+  const vision = input.vision ?? null;
+  const intent = classifyBuilderIntent({
+    message,
+    project: input.project ?? null,
+    hasBrief: Boolean(input.brief),
+    vision,
+  });
 
   if (!message) {
     return {
       mode: "chat",
       reply: "Me diga o site, SaaS ou ajuste que voce quer criar.",
+      vision: vision?.analysis ?? null,
       suggestions: defaultSuggestions,
       tokenCost: 0,
     };
   }
 
   if (input.brief) {
-    const project = buildProjectFromBrief(input.brief);
+    const project = buildProjectFromBrief(input.brief, vision);
 
     return {
       mode: "create",
       project,
+      vision: vision?.analysis ?? null,
       reply: [
         `Criei ${project.name} com o modelo visual principal.`,
         project.summary,
@@ -147,12 +170,13 @@ export function respondToBuilderMessage(input: {
     };
   }
 
-  if (input.project && looksLikeEdit(message)) {
-    const project = editProjectFromPrompt(input.project, message);
+  if (input.project && intent === "edit") {
+    const project = editProjectFromPrompt(input.project, message, vision);
 
     return {
       mode: "edit",
       project,
+      vision: vision?.analysis ?? null,
       reply: [
         `Atualizei ${project.name}.`,
         project.summary,
@@ -167,12 +191,13 @@ export function respondToBuilderMessage(input: {
     };
   }
 
-  if (looksLikeBuild(message) || !input.project) {
-    const project = buildProjectFromPrompt(message);
+  if (intent === "create") {
+    const project = buildProjectFromPrompt(message, vision);
 
     return {
       mode: "create",
       project,
+      vision: vision?.analysis ?? null,
       reply: [
         `Criei ${project.name}.`,
         project.summary,
@@ -189,13 +214,14 @@ export function respondToBuilderMessage(input: {
 
   return {
     mode: "chat",
-    reply: buildConversationalReply(message, input.project),
+    reply: buildConversationalReply(message, input.project, vision),
+    vision: vision?.analysis ?? null,
     suggestions: defaultSuggestions,
-    tokenCost: estimateTokenCost(message, "chat"),
+    tokenCost: estimateTokenCost(message, "chat") + (vision ? 6 : 0),
   };
 }
 
-export function buildProjectFromBrief(brief: ProjectBrief): BuilderProject {
+export function buildProjectFromBrief(brief: ProjectBrief, vision?: VisionContext | null): BuilderProject {
   const cleanBrief = normalizeBrief(brief);
   const prompt = [
     `Crie um site profissional para ${cleanBrief.companyName}.`,
@@ -209,15 +235,22 @@ export function buildProjectFromBrief(brief: ProjectBrief): BuilderProject {
   const now = new Date().toISOString();
   const industry = detectIndustry(cleanBrief.niche);
   const palette = buildPaletteFromColor(cleanBrief.primaryColor, prompt);
-  const features = buildFeatures(prompt, "site", industry);
+  const features = withVisionFeatures(buildFeatures(prompt, "site", industry), vision);
   const projectName = titleCase(cleanBrief.companyName);
+  const contextMessage = appendVisionContext(prompt, vision);
   const augmentedPrompt = `${prompt}\n\nContexto IA:\n${buildAugmentedPrompt({
-    message: prompt,
+    message: contextMessage,
     industry,
     projectName,
     brief: cleanBrief,
   })}`;
-  const summary = `${cleanBrief.companyName} agora tem uma base completa para ${industry}, com site responsivo, area logada, vendas, estoque, agendamento e painel administrativo.`;
+  const visionReferences = buildVisionReferences(vision, now);
+  const summary = [
+    `${cleanBrief.companyName} agora tem uma base completa para ${industry}, com site responsivo, area logada, vendas, estoque, agendamento e painel administrativo.`,
+    visionReferences.length ? "A referencia visual anexada foi incorporada ao preview." : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return {
     id: createId(prompt),
@@ -231,12 +264,14 @@ export function buildProjectFromBrief(brief: ProjectBrief): BuilderProject {
     steps: [
       "Briefing estruturado recebido.",
       "Nicho, contato e cor principal aplicados.",
+      ...(visionReferences.length ? ["Vision Agent analisou a imagem anexada."] : []),
       "Conteudo, tema e imagens adaptados ao nicho.",
       "Area logada, vendas, estoque e agendamento preparados.",
       "Arquivos organizados para download em ZIP.",
     ],
     features,
-    files: buildFiles(cleanBrief.companyName, "site", features, augmentedPrompt, cleanBrief),
+    files: buildFiles(cleanBrief.companyName, "site", features, augmentedPrompt, cleanBrief, visionReferences),
+    visionReferences,
     previewHtml: buildPreviewHtml({
       prompt: augmentedPrompt,
       name: projectName,
@@ -245,6 +280,7 @@ export function buildProjectFromBrief(brief: ProjectBrief): BuilderProject {
       features,
       palette,
       brief: cleanBrief,
+      visionReferences,
       editNotes: [],
     }),
     editCount: 0,
@@ -253,21 +289,24 @@ export function buildProjectFromBrief(brief: ProjectBrief): BuilderProject {
   };
 }
 
-export function buildProjectFromPrompt(prompt: string): BuilderProject {
+export function buildProjectFromPrompt(prompt: string, vision?: VisionContext | null): BuilderProject {
   const cleanPrompt = prompt.trim();
   const now = new Date().toISOString();
-  const kind = detectKind(cleanPrompt);
-  const industry = detectIndustry(cleanPrompt);
-  const palette = pickPalette(cleanPrompt);
-  const name = buildName(cleanPrompt, industry, kind);
-  const features = buildFeatures(cleanPrompt, kind, industry);
+  const inferencePrompt = appendVisionContext(cleanPrompt, vision);
+  const kind = detectKind(inferencePrompt);
+  const industry = detectIndustry(inferencePrompt);
+  const palette = pickPalette(inferencePrompt);
+  const name = buildName(inferencePrompt, industry, kind);
+  const features = withVisionFeatures(buildFeatures(inferencePrompt, kind, industry), vision);
   const augmentedPrompt = `${cleanPrompt}\n\nContexto IA:\n${buildAugmentedPrompt({
-    message: cleanPrompt,
+    message: inferencePrompt,
     industry,
     projectName: name,
   })}`;
+  const visionReferences = buildVisionReferences(vision, now);
   const steps = [
     "Entendimento do publico, objetivo e tipo de produto.",
+    ...(visionReferences.length ? ["Vision Agent analisou screenshot/imagem anexada."] : []),
     "Definicao de arquitetura visual, paginas e componentes.",
     "Geracao do preview seguro dentro do iframe.",
     "Criacao de arquivos sugeridos para evoluir o projeto real.",
@@ -277,18 +316,22 @@ export function buildProjectFromPrompt(prompt: string): BuilderProject {
     kind === "saas" || kind === "dashboard"
       ? `${name} e um sistema com onboarding, painel, metricas, entidades de negocio e caminhos preparados para autenticacao, banco e pagamento.`
       : `${name} e um projeto completo com site responsivo, backend, area logada, vendas, estoque, agendamento e painel administrativo.`;
+  const fullSummary = visionReferences.length
+    ? `${summary} A referencia visual enviada foi usada para orientar o preview.`
+    : summary;
 
   return {
     id: createId(cleanPrompt),
     name,
     kind,
-    summary,
+    summary: fullSummary,
     prompt: augmentedPrompt,
     industry,
     paletteName: palette.name,
     steps,
     features,
-    files: buildFiles(name, kind, features, augmentedPrompt),
+    files: buildFiles(name, kind, features, augmentedPrompt, undefined, visionReferences),
+    visionReferences,
     previewHtml: buildPreviewHtml({
       prompt: augmentedPrompt,
       name,
@@ -297,6 +340,7 @@ export function buildProjectFromPrompt(prompt: string): BuilderProject {
       features,
       palette,
       brief: undefined,
+      visionReferences,
       editNotes: [],
     }),
     editCount: 0,
@@ -305,19 +349,28 @@ export function buildProjectFromPrompt(prompt: string): BuilderProject {
   };
 }
 
-function editProjectFromPrompt(project: BuilderProject, prompt: string): BuilderProject {
+function editProjectFromPrompt(
+  project: BuilderProject,
+  prompt: string,
+  vision?: VisionContext | null,
+): BuilderProject {
   const now = new Date().toISOString();
   const changes: string[] = [];
   const intent = latestPromptIntent(prompt);
   const selectedElement = extractSelectedElement(prompt);
   const descriptionOverride = extractDescriptionOverride(intent);
   const imageTarget = extractImageTarget(intent);
+  const newVisionReferences = buildVisionReferences(vision, now);
+  const visionReferences = mergeVisionReferences(
+    shouldClearVisionReferences(prompt) ? [] : project.visionReferences ?? [],
+    newVisionReferences,
+  );
   const requestedName = extractRequestedName(prompt);
   const requestedKind = extractRequestedKind(prompt);
   const requestedPalette = pickEditPalette(prompt) ?? getPalette(project.paletteName);
   const nextFeatures = mergeFeatures(
     project.features,
-    buildFeatures(prompt, requestedKind ?? project.kind, project.industry),
+    withVisionFeatures(buildFeatures(appendVisionContext(prompt, vision), requestedKind ?? project.kind, project.industry), vision),
   );
 
   let name = project.name;
@@ -336,6 +389,14 @@ function editProjectFromPrompt(project: BuilderProject, prompt: string): Builder
 
   if (imageTarget) {
     changes.push(`imagem de ${imageTarget} atualizada`);
+  }
+
+  if (newVisionReferences.length) {
+    changes.push("referencia visual anexada aplicada pelo Vision Agent");
+  }
+
+  if (shouldClearVisionReferences(prompt)) {
+    changes.push("referencias visuais anexadas removidas");
   }
 
   if (selectedElement) {
@@ -362,7 +423,8 @@ function editProjectFromPrompt(project: BuilderProject, prompt: string): Builder
     prompt: nextPrompt,
     paletteName: requestedPalette.name,
     features: nextFeatures,
-    files: buildFiles(name, kind, nextFeatures, nextPrompt, project.brief),
+    files: buildFiles(name, kind, nextFeatures, nextPrompt, project.brief, visionReferences),
+    visionReferences,
     previewHtml: buildPreviewHtml({
       prompt: nextPrompt,
       name,
@@ -371,6 +433,7 @@ function editProjectFromPrompt(project: BuilderProject, prompt: string): Builder
       features: nextFeatures,
       palette: requestedPalette,
       brief: project.brief,
+      visionReferences,
       editNotes: changes,
     }),
     editCount: project.editCount + 1,
@@ -378,9 +441,33 @@ function editProjectFromPrompt(project: BuilderProject, prompt: string): Builder
   };
 }
 
+function classifyBuilderIntent(input: {
+  message: string;
+  project: BuilderProject | null;
+  hasBrief: boolean;
+  vision: VisionContext | null;
+}): BuilderAssistantResponse["mode"] {
+  if (input.hasBrief) return "create";
+
+  const latest = latestPromptIntent(input.message);
+  const visionShouldApply = Boolean(input.vision?.analysis.shouldApplyToPreview);
+
+  if (input.project && (looksLikeEdit(latest) || visionShouldApply)) {
+    return "edit";
+  }
+
+  if (looksLikeBuild(latest)) return "create";
+
+  if (!input.project && visionShouldApply && looksLikeVisionBuild(latest)) {
+    return "create";
+  }
+
+  return "chat";
+}
+
 function looksLikeBuild(prompt: string) {
   const lower = normalize(prompt);
-  return [
+  const buildWords = [
     "crie",
     "criar",
     "faca",
@@ -388,6 +475,8 @@ function looksLikeBuild(prompt: string) {
     "gere",
     "gerar",
     "monte",
+  ];
+  const productWords = [
     "site",
     "saas",
     "sistema",
@@ -398,12 +487,28 @@ function looksLikeBuild(prompt: string) {
     "clinica",
     "restaurante",
     "aplicativo",
-  ].some((word) => lower.includes(word));
+  ];
+
+  if (buildWords.some((word) => lower.includes(word)) && productWords.some((word) => lower.includes(word))) {
+    return true;
+  }
+
+  return [
+    "site para",
+    "saas para",
+    "sistema para",
+    "landing page",
+    "dashboard para",
+    "loja online",
+    "barbearia com",
+    "clinica com",
+    "restaurante com",
+  ].some((phrase) => lower.includes(phrase));
 }
 
 function looksLikeEdit(prompt: string) {
   const lower = normalize(prompt);
-  return [
+  const editWords = [
     "troque",
     "mude",
     "altere",
@@ -414,7 +519,16 @@ function looksLikeEdit(prompt: string) {
     "tire",
     "aumente",
     "diminua",
+    "substitua",
+    "aplique",
+    "refaca",
+    "deixe",
+    "colocar",
+  ];
+  const targets = [
     "titulo",
+    "hero",
+    "headline",
     "nome",
     "cor",
     "botao",
@@ -430,11 +544,47 @@ function looksLikeEdit(prompt: string) {
     "pagamento",
     "login",
     "dashboard",
+    "premium",
+    "moderno",
+    "sofisticado",
+  ];
+
+  return editWords.some((word) => lower.includes(word)) && targets.some((word) => lower.includes(word));
+}
+
+function looksLikeVisionBuild(prompt: string) {
+  const lower = normalize(prompt);
+  return [
+    "crie",
+    "criar",
+    "faca",
+    "fazer",
+    "gere",
+    "gerar",
+    "monte",
+    "site",
+    "pagina",
+    "landing",
+    "preview",
   ].some((word) => lower.includes(word));
 }
 
-function buildConversationalReply(prompt: string, project?: BuilderProject | null) {
+function buildConversationalReply(
+  prompt: string,
+  project?: BuilderProject | null,
+  vision?: VisionContext | null,
+) {
   const lower = normalize(prompt);
+
+  if (vision) {
+    const analysis = vision.analysis;
+    if (!analysis.shouldApplyToPreview) {
+      return [
+        `Vision Agent analisou o anexo: ${analysis.summary}`,
+        "Ainda nao alterei o preview porque a fala nao pediu uma acao clara. Para aplicar, diga algo como: coloque essa imagem no hero, use esse print como referencia visual, ou troque a imagem selecionada por essa foto.",
+      ].join("\n\n");
+    }
+  }
 
   if (lower.includes("ola") || lower.includes("oi") || lower.includes("bom dia")) {
     return "Oi, zs. Eu posso conversar normal, criar um site do zero ou editar o preview atual. Se ja tiver um projeto aberto, fale algo como: troque o titulo para Barbearia Elite, ou adicione uma area de planos.";
@@ -639,19 +789,90 @@ function mergeFeatures(current: string[], next: string[]) {
   return unique([...current, ...next]).slice(0, 10);
 }
 
+function withVisionFeatures(features: string[], vision?: VisionContext | null) {
+  if (!vision?.analysis.shouldApplyToPreview) return features;
+
+  return unique([
+    ...features,
+    vision.analysis.intent === "use-image-as-layout-reference"
+      ? "Layout orientado por screenshot"
+      : "Imagem anexada aplicada ao site",
+    "Vision Agent",
+  ]).slice(0, 10);
+}
+
+function appendVisionContext(prompt: string, vision?: VisionContext | null) {
+  if (!vision) return prompt;
+
+  const analysis = vision.analysis;
+  return [
+    prompt,
+    "",
+    "Contexto do Vision Agent:",
+    `Aplicar no preview: ${analysis.shouldApplyToPreview ? "sim" : "nao"}`,
+    `Intencao visual: ${analysis.intent}`,
+    `Alvo visual: ${analysis.target}`,
+    `Resumo: ${analysis.summary}`,
+    analysis.layout ? `Layout: ${analysis.layout}` : "",
+    analysis.visualPrompt ? `Direcao visual: ${analysis.visualPrompt}` : "",
+    analysis.colors.length ? `Cores detectadas: ${analysis.colors.join(", ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildVisionReferences(vision: VisionContext | null | undefined, createdAt: string) {
+  if (!vision?.analysis.shouldApplyToPreview || vision.analysis.target === "none") return [];
+
+  const target = vision.analysis.target === "selected" ? "hero" : vision.analysis.target;
+  return vision.attachments.map((attachment): BuilderVisionReference => ({
+    ...attachment,
+    target,
+    summary: vision.analysis.summary,
+    layout: vision.analysis.layout,
+    visualPrompt: vision.analysis.visualPrompt,
+    colors: vision.analysis.colors,
+    source: vision.analysis.source,
+    createdAt,
+  }));
+}
+
+function mergeVisionReferences(
+  current: BuilderVisionReference[],
+  next: BuilderVisionReference[],
+) {
+  if (!next.length) return current;
+
+  const nextTargets = new Set(next.map((reference) => reference.target));
+  return [...current.filter((reference) => !nextTargets.has(reference.target)), ...next].slice(-4);
+}
+
+function shouldClearVisionReferences(prompt: string) {
+  const lower = normalize(prompt);
+  const wantsRemoval = ["remova", "remover", "tire", "tirar", "apague", "apagar"].some((word) =>
+    lower.includes(word),
+  );
+  const mentionsVision = ["imagem anexada", "imagem enviada", "foto anexada", "referencia", "print"].some((word) =>
+    lower.includes(word),
+  );
+
+  return wantsRemoval && mentionsVision;
+}
+
 function buildFiles(
   name: string,
   kind: BuilderProject["kind"],
   features: string[],
   prompt: string,
   brief?: ProjectBrief,
+  visionReferences: BuilderVisionReference[] = [],
 ): BuilderFile[] {
   const slug = slugify(name);
   const wantsAuth = features.some((feature) => normalize(feature).includes("autentic"));
   const wantsPayment = features.some((feature) => normalize(feature).includes("pagamento"));
   const wantsDashboard = kind === "saas" || kind === "dashboard";
 
-  const files: BuilderFile[] = buildGeneratedNextFiles(name, kind, features, prompt, brief);
+  const files: BuilderFile[] = buildGeneratedNextFiles(name, kind, features, prompt, brief, visionReferences);
 
   files.push(...buildGeneratedBackendFiles(slug, name, prompt, brief));
   files.push(...getReusableTemplateFiles(slug));
@@ -1734,6 +1955,7 @@ function buildGeneratedNextFiles(
   features: string[],
   prompt: string,
   brief?: ProjectBrief,
+  visionReferences: BuilderVisionReference[] = [],
 ): BuilderFile[] {
   const slug = slugify(name);
   const component = componentName(name);
@@ -1796,7 +2018,7 @@ export default function Page() {
       path: `src/lib/generated/${slug}-config.ts`,
       language: "ts",
       description: "Configuração editável do site com textos, cores, imagens, contato e produtos.",
-      content: buildGeneratedConfigSource(name, kind, features, prompt, brief),
+      content: buildGeneratedConfigSource(name, kind, features, prompt, brief, visionReferences),
     },
   ];
 }
@@ -2514,8 +2736,9 @@ function buildGeneratedConfigSource(
   features: string[],
   prompt: string,
   brief?: ProjectBrief,
+  visionReferences: BuilderVisionReference[] = [],
 ) {
-  const config = buildGeneratedConfig(name, kind, features, prompt, brief);
+  const config = buildGeneratedConfig(name, kind, features, prompt, brief, visionReferences);
 
   return `export type GeneratedSiteConfig = {
   name: string;
@@ -2602,6 +2825,7 @@ function buildGeneratedConfig(
   features: string[],
   prompt: string,
   brief?: ProjectBrief,
+  visionReferences: BuilderVisionReference[] = [],
 ) {
   const industry = detectIndustry(brief?.niche?.trim() || latestPromptIntent(prompt));
   const isBakery = normalize(industry).includes("padaria");
@@ -2618,7 +2842,7 @@ function buildGeneratedConfig(
     ...item,
   }));
 
-  return {
+  const config = {
     name: siteName,
     kind,
     niche: nicheLabel,
@@ -2667,6 +2891,94 @@ function buildGeneratedConfig(
       { label: "WhatsApp", href: "#contato" },
     ],
   };
+
+  return applyVisionReferenceToConfig(config, visionReferences);
+}
+
+function applyVisionReferenceToConfig<T extends {
+  theme: {
+    primary: string;
+    primaryDark: string;
+    border: string;
+    shadow: string;
+  };
+  hero: {
+    subtitle: string;
+    cardTitle: string;
+    cardText: string;
+  };
+  about: {
+    title: string;
+    text: string;
+  };
+  images: {
+    hero: string;
+    heroAlt: string;
+    promo: string;
+    promoAlt: string;
+  };
+  differentials: Array<{ code: string; title: string; text: string }>;
+  products: Array<{ image: string; imageAlt: string }>;
+  promo: {
+    title: string;
+    text: string;
+  };
+}>(config: T, visionReferences: BuilderVisionReference[]) {
+  const reference = getActiveVisionReference(visionReferences);
+  if (!reference) return config;
+
+  const primary = reference.colors.find((color) => /^#[0-9a-f]{6}$/i.test(color));
+  if (primary) {
+    config.theme.primary = primary;
+    config.theme.primaryDark = primary;
+    config.theme.border = `${primary}33`;
+    config.theme.shadow = `0 18px 50px ${primary}24`;
+  }
+
+  const summary = cleanSentence(reference.summary || "Referencia visual aplicada ao site.", 150);
+  const layout = cleanSentence(reference.layout || reference.visualPrompt || summary, 180);
+  const alt = cleanSentence(reference.summary || reference.name, 120);
+
+  config.hero.cardTitle = "Referencia visual aplicada";
+  config.hero.cardText = summary;
+  config.about.title = "Direcao visual do Vision Agent";
+  config.about.text = layout;
+
+  if (config.differentials.length) {
+    config.differentials[0] = {
+      code: config.differentials[0].code,
+      title: "Imagem analisada",
+      text: summary,
+    };
+  }
+
+  if (reference.target === "style") {
+    config.hero.subtitle = cleanSentence(reference.visualPrompt || layout, 190) || config.hero.subtitle;
+    return config;
+  }
+
+  if (reference.target === "gallery") {
+    config.images.promo = reference.dataUrl;
+    config.images.promoAlt = alt;
+    config.promo.title = "Destaque com imagem enviada";
+    config.promo.text = summary;
+    if (config.products[0]) {
+      config.products[0] = {
+        ...config.products[0],
+        image: reference.dataUrl,
+        imageAlt: alt,
+      };
+    }
+    return config;
+  }
+
+  config.images.hero = reference.dataUrl;
+  config.images.heroAlt = alt;
+  return config;
+}
+
+function getActiveVisionReference(visionReferences?: BuilderVisionReference[]) {
+  return visionReferences?.at(-1) ?? null;
 }
 
 function buildTemplateTheme(industry: string, palette: Palette, requestedColor?: string) {
@@ -3406,6 +3718,7 @@ function buildPreviewHtml(input: {
   features: string[];
   palette: Palette;
   brief?: ProjectBrief;
+  visionReferences?: BuilderVisionReference[];
   editNotes: string[];
 }) {
   if (input.name) {
@@ -3954,8 +4267,16 @@ function buildSiteReferencePreviewHtml(input: {
   features: string[];
   palette: Palette;
   brief?: ProjectBrief;
+  visionReferences?: BuilderVisionReference[];
 }) {
-  const config = buildGeneratedConfig(input.name, input.kind, input.features, input.prompt, input.brief);
+  const config = buildGeneratedConfig(
+    input.name,
+    input.kind,
+    input.features,
+    input.prompt,
+    input.brief,
+    input.visionReferences,
+  );
   const directives = extractPreviewDirectives(input.prompt);
   const media = applyMediaDirectives(getNicheMedia(input.industry), directives);
   const contact = buildContact(input.brief);
