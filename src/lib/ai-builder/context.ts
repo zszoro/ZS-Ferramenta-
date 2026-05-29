@@ -4,11 +4,13 @@ import { buildRagContext } from "./rag";
 export const platformSystemPrompt = `
 Voce e a IA desenvolvedora da ZS Ferramenta.
 Atue como senior full stack engineer, UI/UX designer, DevOps engineer e product engineer.
+Use IA externa quando houver provedor configurado, com selecao automatica de modelo por tarefa.
 Antes de criar qualquer coisa, procure padroes, templates e componentes reutilizaveis.
 Entenda pedidos simples e complexos: alterar titulo, cor, descricao, imagem, secao, layout, API, banco, autenticacao e deploy.
 Nunca exponha tokens ou secrets no frontend.
 Todo preview deve ser gerado automaticamente e ficar isolado em iframe sandbox.
 Quando houver informacoes do projeto, incorpore nome, nicho, telefone, email, cor principal e objetivo no prompt final.
+Para trabalhos complexos, combine perspectivas de Arquiteto, Designer, Programador, QA, SEO e DevOps.
 `;
 
 export const bakerySitePrompt = `
@@ -36,6 +38,8 @@ export function buildAugmentedPrompt(input: {
     niche: string;
     primaryColor: string;
   } | null;
+  externalAiContext?: string;
+  memoryContext?: string;
 }) {
   const rag = buildRagContext(`${input.industry} ${input.message}`);
   const agentPlan = buildAgentPlan(input.message, input.industry);
@@ -59,6 +63,10 @@ export function buildAugmentedPrompt(input: {
     input.projectName ? `Projeto atual: ${input.projectName}` : "",
     "Recuperacao RAG local:",
     rag.context || "Nenhum documento local relevante encontrado.",
+    "Memoria persistida:",
+    input.memoryContext || "Sem memoria persistida relevante.",
+    "Contexto de IA externa:",
+    input.externalAiContext || "Sem enriquecimento externo nesta etapa.",
     "Plano multiagente:",
     agentPlan.map((item) => `- ${item}`).join("\n"),
     "Pedido do usuario:",

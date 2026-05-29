@@ -8,6 +8,9 @@ Chat de IA para criar sites, SaaS e sistemas automaticamente com preview ao vivo
 - Chat principal para criar projetos e pedir edicoes em linguagem natural.
 - Botao `Criar projeto` com briefing inicial: nome da empresa, WhatsApp, email, nicho e cor principal.
 - Gerador local em `src/lib/ai-builder/generator.ts` com modos conversa, criacao e edicao.
+- Motor externo opcional com OpenRouter, OpenAI, Anthropic, Gemini, DeepSeek, Qwen, Llama e Mistral.
+- Selecao de modelo Auto/Rapido/Equilibrado/Avancado e agentes Arquiteto, Designer, Programador, QA e SEO.
+- Memoria local de projetos e biblioteca de componentes em `.zs/builder-memory.json`.
 - API `POST /api/ai/chat` para conversar, criar e editar o projeto atual.
 - API `POST /api/ai/build` preservada para compatibilidade.
 - Conta local com 500 tokens iniciais, consumo por uso e reset semanal.
@@ -35,8 +38,12 @@ src/app/api/ai/chat/route.ts
 src/app/api/ai/build/route.ts
 src/app/api/billing/mercado-pago/route.ts
 src/lib/ai-builder/generator.ts
+src/lib/ai-builder/external-ai.ts
+src/lib/ai-builder/project-memory.ts
 ```
 
 ## Proximo passo natural
 
-O gerador atual e local e deterministico para nao depender de chave externa. Para login real multi-dispositivo, tokens persistentes e pagamento real, conecte banco no Vercel/Neon/Supabase e use `MERCADO_PAGO_ACCESS_TOKEN` no Route Handler de billing.
+Copie `.env.example` para `.env.local` e configure pelo menos uma chave de IA externa para ativar modelos reais. Sem chave, o fallback local continua funcionando. Para login real multi-dispositivo, tokens persistentes e pagamento real, conecte banco no Vercel/Neon/Supabase e use `MERCADO_PAGO_ACCESS_TOKEN` no Route Handler de billing.
+
+Mais detalhes: `docs/ai-engine.md`.

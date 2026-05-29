@@ -1,5 +1,7 @@
 import { buildAugmentedPrompt, getReusableTemplateFiles } from "./context";
+import { enhanceBuilderRequest } from "./external-ai";
 import { buildEditDoneReply } from "./responses";
+import type { AiEngineReport, AiGenerationBlueprint, AiModelMode } from "./engine-types";
 import type { BuilderImageAttachment, VisionAnalysis, VisionContext, VisionTarget } from "./vision";
 
 export type BuilderFile = {
@@ -30,6 +32,7 @@ export type BuilderProject = {
   steps: string[];
   features: string[];
   files: BuilderFile[];
+  aiEngine?: AiEngineReport;
   visionReferences?: BuilderVisionReference[];
   editCount: number;
   createdAt: string;
@@ -51,8 +54,16 @@ export type BuilderAssistantResponse = {
   reply: string;
   project?: BuilderProject;
   vision?: VisionAnalysis | null;
+  aiEngine?: AiEngineReport;
+  aiBlueprint?: AiGenerationBlueprint | null;
   suggestions: string[];
   tokenCost: number;
+};
+
+type BuilderGenerationContext = {
+  blueprint?: AiGenerationBlueprint | null;
+  aiEngine?: AiEngineReport;
+  memoryContext?: string;
 };
 
 type Palette = {
@@ -125,13 +136,14 @@ const defaultSuggestions = [
   "Mude as cores para verde neon e deixe mais premium.",
 ];
 
-export function respondToBuilderMessage(input: {
+export async function respondToBuilderMessage(input: {
   message: string;
   project?: BuilderProject | null;
   brief?: ProjectBrief | null;
   vision?: VisionContext | null;
   userName?: string;
-}): BuilderAssistantResponse {
+  modelMode?: AiModelMode | string;
+}): Promise<BuilderAssistantResponse> {
   const message = input.message.trim();
   const vision = input.vision ?? null;
   const intent = classifyBuilderIntent({
@@ -151,15 +163,34 @@ export function respondToBuilderMessage(input: {
     };
   }
 
+  const aiEnhancement = await enhanceBuilderRequest({
+    message,
+    intent,
+    modelMode: input.modelMode,
+    hasProject: Boolean(input.project),
+    hasBrief: Boolean(input.brief),
+    visionSummary: vision?.analysis.summary ?? null,
+  });
+  const generationContext: BuilderGenerationContext = {
+    blueprint: aiEnhancement.blueprint,
+    aiEngine: aiEnhancement.report,
+    memoryContext: aiEnhancement.memoryContext,
+  };
+  const effectiveMessage = buildEffectivePrompt(message, generationContext);
+  const externalReply = aiEnhancement.blueprint?.reply?.trim();
+  const externalTokenCost = aiEnhancement.report.usedExternal ? aiEnhancement.report.estimatedTokenCost : 0;
+
   if (input.brief) {
-    const project = buildProjectFromBrief(input.brief, vision);
+    const project = buildProjectFromBrief(input.brief, vision, generationContext);
 
     return {
       mode: "create",
       project,
       vision: vision?.analysis ?? null,
+      aiEngine: aiEnhancement.report,
+      aiBlueprint: aiEnhancement.blueprint,
       reply: [
-        `Criei ${project.name} com o modelo visual principal.`,
+        externalReply || `Criei ${project.name} com o modelo visual principal.`,
         project.summary,
         "O projeto ja inclui estrutura de site, area logada, rotas de backend, banco, vendas, estoque e agendamentos.",
       ].join("\n\n"),
@@ -168,12 +199,12 @@ export function respondToBuilderMessage(input: {
         "Crie uma secao de servicos com precos.",
         "Troque a imagem principal por outra referencia.",
       ],
-      tokenCost: estimateTokenCost(message, "create"),
+      tokenCost: estimateTokenCost(message, "create") + externalTokenCost,
     };
   }
 
   if (input.project && intent === "edit") {
-    const project = editProjectFromPrompt(input.project, message, vision);
+    const project = editProjectFromPrompt(input.project, message, vision, generationContext);
     const editTarget = describeEditTarget(message);
     const isRemoval = isRemovalPrompt(message);
 
@@ -181,6 +212,8 @@ export function respondToBuilderMessage(input: {
       mode: "edit",
       project,
       vision: vision?.analysis ?? null,
+      aiEngine: aiEnhancement.report,
+      aiBlueprint: aiEnhancement.blueprint,
       reply: buildEditDoneReply({
         userName: input.userName,
         projectName: project.name,
@@ -193,19 +226,21 @@ export function respondToBuilderMessage(input: {
         "Adicione uma secao de planos com Mercado Pago.",
         "Deixe o hero mais sofisticado e com prova social.",
       ],
-      tokenCost: estimateTokenCost(message, "edit"),
+      tokenCost: estimateTokenCost(message, "edit") + externalTokenCost,
     };
   }
 
   if (intent === "create") {
-    const project = buildProjectFromPrompt(message, vision);
+    const project = buildProjectFromPrompt(effectiveMessage, vision, generationContext);
 
     return {
       mode: "create",
       project,
       vision: vision?.analysis ?? null,
+      aiEngine: aiEnhancement.report,
+      aiBlueprint: aiEnhancement.blueprint,
       reply: [
-        `Criei ${project.name}.`,
+        externalReply || `Criei ${project.name}.`,
         project.summary,
         "A estrutura gerada ja vem com componentes, rotas, banco, autenticacao, vendas, estoque e agendamento para evoluir como projeto real.",
       ].join("\n\n"),
@@ -214,21 +249,28 @@ export function respondToBuilderMessage(input: {
         "Adicione autenticacao, pagamentos e painel admin.",
         "Crie uma versao mobile com CTA fixo.",
       ],
-      tokenCost: estimateTokenCost(message, "create"),
+      tokenCost: estimateTokenCost(message, "create") + externalTokenCost,
     };
   }
 
   return {
     mode: "chat",
-    reply: buildConversationalReply(message, input.project, vision),
+    reply: externalReply || buildConversationalReply(message, input.project, vision),
     vision: vision?.analysis ?? null,
+    aiEngine: aiEnhancement.report,
+    aiBlueprint: aiEnhancement.blueprint,
     suggestions: defaultSuggestions,
-    tokenCost: estimateTokenCost(message, "chat") + (vision ? 6 : 0),
+    tokenCost: estimateTokenCost(message, "chat") + (vision ? 6 : 0) + externalTokenCost,
   };
 }
 
-export function buildProjectFromBrief(brief: ProjectBrief, vision?: VisionContext | null): BuilderProject {
+export function buildProjectFromBrief(
+  brief: ProjectBrief,
+  vision?: VisionContext | null,
+  generationContext: BuilderGenerationContext = {},
+): BuilderProject {
   const cleanBrief = normalizeBrief(brief);
+  const blueprint = generationContext.blueprint;
   const prompt = [
     `Crie um site profissional para ${cleanBrief.companyName}.`,
     `Nicho: ${cleanBrief.niche}.`,
@@ -241,18 +283,24 @@ export function buildProjectFromBrief(brief: ProjectBrief, vision?: VisionContex
   const now = new Date().toISOString();
   const industry = detectIndustry(cleanBrief.niche);
   const palette = buildPaletteFromColor(cleanBrief.primaryColor, prompt);
-  const features = withVisionFeatures(buildFeatures(prompt, "site", industry), vision);
-  const projectName = titleCase(cleanBrief.companyName);
+  const features = withVisionFeatures(
+    mergeFeatures(buildFeatures(prompt, "site", industry), blueprint?.features ?? []),
+    vision,
+  );
+  const projectName = titleCase(blueprint?.projectName || cleanBrief.companyName);
   const contextMessage = appendVisionContext(prompt, vision);
   const augmentedPrompt = `${prompt}\n\nContexto IA:\n${buildAugmentedPrompt({
     message: contextMessage,
     industry,
     projectName,
     brief: cleanBrief,
+    externalAiContext: buildExternalAiContext(generationContext),
+    memoryContext: generationContext.memoryContext,
   })}`;
   const visionReferences = buildVisionReferences(vision, now);
   const summary = [
     `${cleanBrief.companyName} agora tem uma base completa para ${industry}, com site responsivo, area logada, vendas, estoque, agendamento e painel administrativo.`,
+    blueprint?.reply || "",
     visionReferences.length ? "A referencia visual anexada foi incorporada ao preview." : "",
   ]
     .filter(Boolean)
@@ -271,12 +319,15 @@ export function buildProjectFromBrief(brief: ProjectBrief, vision?: VisionContex
       "Briefing estruturado recebido.",
       "Nicho, contato e cor principal aplicados.",
       ...(visionReferences.length ? ["Vision Agent analisou a imagem anexada."] : []),
+      buildAiEngineStep(generationContext.aiEngine),
       "Conteudo, tema e imagens adaptados ao nicho.",
       "Area logada, vendas, estoque e agendamento preparados.",
+      "Preview validado com estrutura HTML segura para iframe sandbox.",
       "Arquivos organizados para download em ZIP.",
-    ],
+    ].filter(Boolean),
     features,
-    files: buildFiles(cleanBrief.companyName, "site", features, augmentedPrompt, cleanBrief, visionReferences),
+    files: buildFiles(cleanBrief.companyName, "site", features, augmentedPrompt, cleanBrief, visionReferences, generationContext),
+    aiEngine: generationContext.aiEngine,
     visionReferences,
     previewHtml: buildPreviewHtml({
       prompt: augmentedPrompt,
@@ -295,36 +346,53 @@ export function buildProjectFromBrief(brief: ProjectBrief, vision?: VisionContex
   };
 }
 
-export function buildProjectFromPrompt(prompt: string, vision?: VisionContext | null): BuilderProject {
+export function buildProjectFromPrompt(
+  prompt: string,
+  vision?: VisionContext | null,
+  generationContext: BuilderGenerationContext = {},
+): BuilderProject {
   const cleanPrompt = prompt.trim();
+  const blueprint = generationContext.blueprint;
   const now = new Date().toISOString();
   const inferencePrompt = appendVisionContext(cleanPrompt, vision);
-  const kind = detectKind(inferencePrompt);
-  const industry = detectIndustry(inferencePrompt);
+  const kind = blueprint?.kind ?? detectKind(inferencePrompt);
+  const industry = blueprint?.industry || detectIndustry(inferencePrompt);
   const palette = pickPalette(inferencePrompt);
-  const name = buildName(inferencePrompt, industry, kind);
-  const features = withVisionFeatures(buildFeatures(inferencePrompt, kind, industry), vision);
+  const name = blueprint?.projectName ? titleCase(cleanName(blueprint.projectName)) : buildName(inferencePrompt, industry, kind);
+  const features = withVisionFeatures(
+    mergeFeatures(buildFeatures(inferencePrompt, kind, industry), blueprint?.features ?? []),
+    vision,
+  );
   const augmentedPrompt = `${cleanPrompt}\n\nContexto IA:\n${buildAugmentedPrompt({
     message: inferencePrompt,
     industry,
     projectName: name,
+    externalAiContext: buildExternalAiContext(generationContext),
+    memoryContext: generationContext.memoryContext,
   })}`;
   const visionReferences = buildVisionReferences(vision, now);
   const steps = [
     "Entendimento do publico, objetivo e tipo de produto.",
     ...(visionReferences.length ? ["Vision Agent analisou screenshot/imagem anexada."] : []),
+    buildAiEngineStep(generationContext.aiEngine),
     "Definicao de arquitetura visual, paginas e componentes.",
+    "Agentes de arquitetura, design, codigo, QA e SEO aplicados quando necessario.",
     "Geracao do preview seguro dentro do iframe.",
+    "Preview validado com estrutura HTML, viewport e conteudo principal.",
     "Criacao de arquivos sugeridos para evoluir o projeto real.",
     "Preparacao para integrar banco, autenticacao, APIs e pagamentos.",
-  ];
+  ].filter(Boolean);
   const summary =
     kind === "saas" || kind === "dashboard"
       ? `${name} e um sistema com onboarding, painel, metricas, entidades de negocio e caminhos preparados para autenticacao, banco e pagamento.`
       : `${name} e um projeto completo com site responsivo, backend, area logada, vendas, estoque, agendamento e painel administrativo.`;
-  const fullSummary = visionReferences.length
-    ? `${summary} A referencia visual enviada foi usada para orientar o preview.`
-    : summary;
+  const fullSummary = [
+    summary,
+    blueprint?.reply,
+    visionReferences.length ? "A referencia visual enviada foi usada para orientar o preview." : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return {
     id: createId(cleanPrompt),
@@ -336,7 +404,8 @@ export function buildProjectFromPrompt(prompt: string, vision?: VisionContext | 
     paletteName: palette.name,
     steps,
     features,
-    files: buildFiles(name, kind, features, augmentedPrompt, undefined, visionReferences),
+    files: buildFiles(name, kind, features, augmentedPrompt, undefined, visionReferences, generationContext),
+    aiEngine: generationContext.aiEngine,
     visionReferences,
     previewHtml: buildPreviewHtml({
       prompt: augmentedPrompt,
@@ -359,8 +428,10 @@ function editProjectFromPrompt(
   project: BuilderProject,
   prompt: string,
   vision?: VisionContext | null,
+  generationContext: BuilderGenerationContext = {},
 ): BuilderProject {
   const now = new Date().toISOString();
+  const blueprint = generationContext.blueprint;
   const changes: string[] = [];
   const intent = latestPromptIntent(prompt);
   const selectedElement = extractSelectedElement(prompt);
@@ -373,11 +444,17 @@ function editProjectFromPrompt(
     newVisionReferences,
   );
   const requestedName = extractRequestedName(prompt);
-  const requestedKind = isRemovalPrompt(prompt) ? null : extractRequestedKind(prompt);
+  const requestedKind = isRemovalPrompt(prompt) ? null : blueprint?.kind ?? extractRequestedKind(prompt);
   const requestedPalette = pickEditPalette(prompt) ?? getPalette(project.paletteName);
   let nextFeatures = mergeFeatures(
     project.features,
-    withVisionFeatures(buildFeatures(appendVisionContext(prompt, vision), requestedKind ?? project.kind, project.industry), vision),
+    withVisionFeatures(
+      mergeFeatures(
+        buildFeatures(appendVisionContext(prompt, vision), requestedKind ?? project.kind, project.industry),
+        blueprint?.features ?? [],
+      ),
+      vision,
+    ),
   );
   nextFeatures = applyFeatureRemovals(nextFeatures, removalDirectives);
 
@@ -415,6 +492,10 @@ function editProjectFromPrompt(
     changes.push("referencia visual anexada aplicada pelo Vision Agent");
   }
 
+  if (blueprint?.editNotes?.length) {
+    changes.push(...blueprint.editNotes.slice(0, 4));
+  }
+
   if (shouldClearVisionReferences(prompt)) {
     changes.push("referencias visuais anexadas removidas");
   }
@@ -443,7 +524,8 @@ function editProjectFromPrompt(
     prompt: nextPrompt,
     paletteName: requestedPalette.name,
     features: nextFeatures,
-    files: buildFiles(name, kind, nextFeatures, nextPrompt, project.brief, visionReferences),
+    files: buildFiles(name, kind, nextFeatures, nextPrompt, project.brief, visionReferences, generationContext),
+    aiEngine: generationContext.aiEngine,
     visionReferences,
     previewHtml: buildPreviewHtml({
       prompt: nextPrompt,
@@ -756,11 +838,55 @@ function buildConversationalReply(
     ].join("\n\n");
   }
 
+  if (looksLikeCodeInput(prompt)) {
+    return buildLocalCodeAnalysisReply(prompt);
+  }
+
   if (project) {
     return `O projeto atual e ${project.name}. Posso editar textos, cores, secoes, CTAs, recursos e estrutura funcional. Me diga exatamente o que quer mudar no preview.`;
   }
 
   return "Ainda nao existe um projeto aberto. Me diga o tipo de site ou SaaS que voce quer criar e eu monto a primeira versao com preview.";
+}
+
+function looksLikeCodeInput(prompt: string) {
+  return /```[\s\S]+```/.test(prompt) || /\b(function|const|let|class|interface|export|import|model\s+\w+|SELECT\s+)/i.test(prompt);
+}
+
+function buildLocalCodeAnalysisReply(prompt: string) {
+  const language = detectCodeLanguage(prompt);
+  const lower = normalize(prompt);
+  const findings = [
+    lower.includes("use client") || lower.includes("usestate")
+      ? "React: confirme se o componente que usa hooks esta marcado com 'use client'."
+      : "",
+    lower.includes("prisma") || lower.includes("model ")
+      ? "Prisma: valide nomes de models, relacoes obrigatorias e rode migrate/db push depois da alteracao."
+      : "",
+    lower.includes("fetch(")
+      ? "API: trate response.ok, erros de JSON e estados de carregamento antes de renderizar dados."
+      : "",
+    lower.includes("process.env") ? "Seguranca: mantenha variaveis sensiveis em Route Handlers ou codigo server-side." : "",
+  ].filter(Boolean);
+
+  return [
+    `Identifiquei codigo em ${language}.`,
+    "Finalidade provavel: implementar uma parte funcional do projeto, como componente, rota, schema ou consulta.",
+    findings.length
+      ? `Pontos para corrigir/validar:\n${findings.map((finding) => `- ${finding}`).join("\n")}`
+      : "Nao encontrei um erro obvio so pela leitura local. Com uma chave de IA externa configurada, eu faco uma revisao mais profunda e proponho a correcao.",
+    "Melhorias gerais: tipar entradas/saidas, validar dados no backend, tratar estados de erro e rodar lint/typecheck/build antes de entregar.",
+  ].join("\n\n");
+}
+
+function detectCodeLanguage(prompt: string) {
+  const lower = normalize(prompt);
+  if (lower.includes("schema.prisma") || lower.includes("model ")) return "Prisma";
+  if (lower.includes("tsx") || lower.includes("jsx") || lower.includes("react") || lower.includes("usestate")) return "React/TSX";
+  if (lower.includes("typescript") || lower.includes("interface ") || lower.includes("type ")) return "TypeScript";
+  if (lower.includes("select ") || lower.includes("insert ")) return "SQL";
+  if (lower.includes("{") && lower.includes("}")) return "JavaScript/TypeScript";
+  return "linguagem nao identificada com confianca";
 }
 
 function detectKind(prompt: string): BuilderProject["kind"] {
@@ -1025,6 +1151,7 @@ function buildFiles(
   prompt: string,
   brief?: ProjectBrief,
   visionReferences: BuilderVisionReference[] = [],
+  generationContext: BuilderGenerationContext = {},
 ): BuilderFile[] {
   const slug = slugify(name);
   const wantsAuth = features.some((feature) => normalize(feature).includes("autentic"));
@@ -1070,7 +1197,176 @@ function buildFiles(
     content: buildGeneratedPrismaSchema(),
   });
 
+  files.push(...buildAiEngineFiles(name, kind, features, prompt, generationContext));
+
+  return dedupeFiles(files);
+}
+
+function buildAiEngineFiles(
+  name: string,
+  kind: BuilderProject["kind"],
+  features: string[],
+  prompt: string,
+  generationContext: BuilderGenerationContext,
+): BuilderFile[] {
+  const blueprint = generationContext.blueprint;
+  const aiEngine = generationContext.aiEngine;
+  const componentLibrary = unique([
+    ...(blueprint?.componentLibrary ?? []),
+    ...(blueprint?.components ?? []),
+    "Header principal",
+    "Footer institucional",
+    "Cards de recursos",
+    "Formulario de contato",
+    "Modal de login",
+    "Menu responsivo",
+  ]).slice(0, 24);
+  const aiPlan = [
+    `# Plano de IA - ${name}`,
+    "",
+    `Tipo: ${kind}`,
+    `Modelo: ${aiEngine?.usedExternal ? `${aiEngine.provider}/${aiEngine.model}` : "fallback local"}`,
+    `Modo: ${aiEngine?.modelMode ?? "auto"} -> ${aiEngine?.resolvedMode ?? "equilibrado"}`,
+    `Tarefa: ${aiEngine?.task ?? "generation"}`,
+    "",
+    "## Prompt Profissional",
+    blueprint?.professionalPrompt || latestPromptIntent(prompt),
+    "",
+    "## Arquitetura",
+    markdownList(blueprint?.architecture, ["Next.js App Router", "Route Handlers para integracoes externas", "Secrets somente no backend"]),
+    "",
+    "## Design e UX",
+    markdownList(blueprint?.design, ["Primeira tela utilizavel", "Preview responsivo", "Componentes reaproveitaveis por nicho"]),
+    "",
+    "## Codigo",
+    markdownList(blueprint?.code, ["Componentes tipados", "APIs com validacao", "Prisma preparado para producao"]),
+    "",
+    "## QA",
+    markdownList(blueprint?.qaChecks, ["Rodar lint, typecheck e build", "Validar rotas principais", "Validar formularios e estados de erro"]),
+    "",
+    "## SEO",
+    markdownList(blueprint?.seo, ["Metadata por pagina", "Sitemap", "Performance e indexacao"]),
+  ].join("\n");
+
+  const files: BuilderFile[] = [
+    {
+      path: "docs/ai-engine-plan.md",
+      language: "md",
+      description: "Plano consolidado pelo motor multi-IA com arquitetura, design, codigo, QA e SEO.",
+      content: aiPlan,
+    },
+    {
+      path: "docs/qa-checklist.md",
+      language: "md",
+      description: "Checklist de validacao do projeto gerado antes de entregar para producao.",
+      content: [
+        `# QA Checklist - ${name}`,
+        "",
+        ...[
+          "Build Next.js sem erro.",
+          "TypeScript sem erro.",
+          "Preview HTML com viewport, body e conteudo principal.",
+          "Rotas de API retornando JSON previsivel.",
+          "Formularios com validacao e estado de erro.",
+          "Nenhum token exposto no frontend.",
+          ...(blueprint?.qaChecks ?? []),
+        ].map((item) => `- [ ] ${item}`),
+      ].join("\n"),
+    },
+    {
+      path: "docs/seo-plan.md",
+      language: "md",
+      description: "Plano de SEO, metadados, sitemap e performance.",
+      content: [
+        `# SEO - ${name}`,
+        "",
+        ...[
+          "Gerar title e description especificos por pagina.",
+          "Criar sitemap.xml e robots.txt no deploy final.",
+          "Usar imagens otimizadas e textos alternativos.",
+          "Manter LCP rapido na primeira dobra.",
+          ...(blueprint?.seo ?? []),
+        ].map((item) => `- ${item}`),
+      ].join("\n"),
+    },
+    {
+      path: "src/lib/generated/component-library.ts",
+      language: "ts",
+      description: "Biblioteca propria de componentes reaproveitaveis salva pela IA.",
+      content: `export const generatedComponentLibrary = ${JSON.stringify(
+        componentLibrary.map((component) => ({
+          name: component,
+          category: categorizeGeneratedComponent(component),
+          sourceProject: name,
+          reusable: true,
+        })),
+        null,
+        2,
+      )} as const;\n`,
+    },
+    {
+      path: "src/lib/generated/project-blueprint.ts",
+      language: "ts",
+      description: "Blueprint estruturado usado para gerar paginas, APIs, schemas e componentes.",
+      content: `export const projectBlueprint = ${JSON.stringify(
+        {
+          name,
+          kind,
+          features,
+          pages: blueprint?.pages ?? [],
+          apis: blueprint?.apis ?? [],
+          databaseModels: blueprint?.databaseModels ?? [],
+          files: blueprint?.files?.map((file) => ({
+            path: file.path,
+            language: file.language,
+            description: file.description,
+          })) ?? [],
+        },
+        null,
+        2,
+      )} as const;\n`,
+    },
+  ];
+
+  for (const artifact of blueprint?.files ?? []) {
+    files.push({
+      path: artifact.path,
+      language: artifact.language,
+      description: artifact.description,
+      content: artifact.content || buildArtifactPlaceholder(artifact, name),
+    });
+  }
+
   return files;
+}
+
+function buildArtifactPlaceholder(
+  artifact: NonNullable<AiGenerationBlueprint["files"]>[number],
+  projectName: string,
+) {
+  if (artifact.language === "md") {
+    return `# ${artifact.description}\n\nArquivo planejado pela IA para ${projectName}.\n`;
+  }
+
+  if (artifact.language === "prisma") {
+    return `// ${artifact.description}\n// Integre este bloco ao schema Prisma principal conforme o modelo de dados do projeto.\n`;
+  }
+
+  if (artifact.language === "json") {
+    return JSON.stringify({ description: artifact.description, projectName }, null, 2);
+  }
+
+  return `// ${artifact.description}\n// Arquivo planejado pela IA para ${projectName}. Complete a implementacao antes do deploy.\n`;
+}
+
+function dedupeFiles(files: BuilderFile[]) {
+  const seen = new Set<string>();
+  return files.filter((file) => {
+    const key = file.path.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function buildGeneratedBackendFiles(
@@ -5800,6 +6096,75 @@ function getNicheProfile(industry: string, name: string) {
 function estimateTokenCost(prompt: string, mode: BuilderAssistantResponse["mode"]) {
   const base = mode === "create" ? 44 : mode === "edit" ? 28 : 8;
   return Math.min(120, base + Math.ceil(prompt.length / 42));
+}
+
+function buildEffectivePrompt(message: string, generationContext: BuilderGenerationContext) {
+  const blueprint = generationContext.blueprint;
+  if (!blueprint?.professionalPrompt) return message;
+
+  return [
+    message,
+    "",
+    "Prompt profissional expandido pela IA externa:",
+    blueprint.professionalPrompt,
+    blueprint.features?.length ? `Recursos priorizados: ${blueprint.features.join(", ")}` : "",
+    blueprint.pages?.length ? `Paginas: ${blueprint.pages.join(", ")}` : "",
+    blueprint.components?.length ? `Componentes: ${blueprint.components.join(", ")}` : "",
+    blueprint.apis?.length ? `APIs: ${blueprint.apis.join(", ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildExternalAiContext(generationContext: BuilderGenerationContext) {
+  const blueprint = generationContext.blueprint;
+  const engine = generationContext.aiEngine;
+
+  if (!blueprint && !engine?.usedExternal) {
+    return engine?.fallbackReason ? `Fallback local: ${engine.fallbackReason}` : "";
+  }
+
+  return [
+    engine?.reason,
+    blueprint?.professionalPrompt ? `Prompt expandido: ${blueprint.professionalPrompt}` : "",
+    blueprint?.features?.length ? `Recursos: ${blueprint.features.join(", ")}` : "",
+    blueprint?.architecture?.length ? `Arquitetura: ${blueprint.architecture.join(" | ")}` : "",
+    blueprint?.design?.length ? `Design: ${blueprint.design.join(" | ")}` : "",
+    blueprint?.code?.length ? `Codigo: ${blueprint.code.join(" | ")}` : "",
+    blueprint?.qaChecks?.length ? `QA: ${blueprint.qaChecks.join(" | ")}` : "",
+    blueprint?.seo?.length ? `SEO: ${blueprint.seo.join(" | ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildAiEngineStep(aiEngine?: AiEngineReport) {
+  if (!aiEngine) return "";
+  if (aiEngine.usedExternal) {
+    const agents = aiEngine.agents.filter((agent) => agent.ok).map((agent) => agent.role);
+    return `IA externa selecionou ${aiEngine.provider}/${aiEngine.model} no modo ${aiEngine.resolvedMode}${
+      agents.length ? ` com agentes: ${agents.join(", ")}` : ""
+    }.`;
+  }
+
+  return `Fallback local usado: ${aiEngine.fallbackReason ?? "provedor externo nao configurado"}.`;
+}
+
+function markdownList(items: string[] | undefined, fallback: string[]) {
+  return (items?.length ? items : fallback).map((item) => `- ${item}`).join("\n");
+}
+
+function categorizeGeneratedComponent(component: string) {
+  const lower = normalize(component);
+  if (lower.includes("header") || lower.includes("cabecalho")) return "header";
+  if (lower.includes("footer") || lower.includes("rodape")) return "footer";
+  if (lower.includes("dashboard") || lower.includes("painel")) return "dashboard";
+  if (lower.includes("form") || lower.includes("login") || lower.includes("cadastro")) return "formulario";
+  if (lower.includes("table") || lower.includes("tabela")) return "tabela";
+  if (lower.includes("modal")) return "modal";
+  if (lower.includes("menu") || lower.includes("nav")) return "menu";
+  if (lower.includes("card")) return "card";
+  return "secao";
 }
 
 function titleCase(input: string) {

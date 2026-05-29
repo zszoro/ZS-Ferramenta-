@@ -44,6 +44,7 @@ import type {
   BuilderProject,
   ProjectBrief,
 } from "@/lib/ai-builder/generator";
+import type { AiEngineReport, AiModelMode } from "@/lib/ai-builder/engine-types";
 import type { BuilderImageAttachment, VisionAnalysis } from "@/lib/ai-builder/vision";
 
 type Screen = "landing" | "onboarding" | "app";
@@ -56,6 +57,7 @@ type ChatMessage = {
   text: string;
   attachments?: BuilderImageAttachment[];
   vision?: VisionAnalysis | null;
+  aiEngine?: AiEngineReport;
   files?: BuilderProject["files"];
 };
 
@@ -68,7 +70,7 @@ type PreviewSelection = {
 type AccountSettings = {
   language: "pt-BR" | "en-US";
   defaultPreview: "desktop" | "mobile";
-  generationQuality: "rapida" | "equilibrada" | "premium";
+  generationQuality: AiModelMode;
   animations: boolean;
   autosave: boolean;
   compactChat: boolean;
@@ -119,7 +121,7 @@ const MAX_CHAT_IMAGE_DIMENSION = 1600;
 const defaultSettings: AccountSettings = {
   language: "pt-BR",
   defaultPreview: "desktop",
-  generationQuality: "equilibrada",
+  generationQuality: "auto",
   animations: true,
   autosave: true,
   compactChat: false,
@@ -386,6 +388,7 @@ export function AiBuilderApp() {
           project,
           attachments: imagesForRequest,
           userName: account.name,
+          modelMode: account.settings.generationQuality,
         }),
       });
       const payload = (await response.json()) as
@@ -413,6 +416,7 @@ export function AiBuilderApp() {
           role: "assistant",
           text: payload.reply,
           vision: payload.vision,
+          aiEngine: payload.aiEngine,
           files: payload.project?.files,
         },
       ]);
@@ -473,7 +477,14 @@ export function AiBuilderApp() {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, project, brief, attachments: imagesForRequest, userName: account.name }),
+        body: JSON.stringify({
+          message,
+          project,
+          brief,
+          attachments: imagesForRequest,
+          userName: account.name,
+          modelMode: account.settings.generationQuality,
+        }),
       });
       const payload = (await response.json()) as
         | ({ ok: true } & BuilderAssistantResponse)
@@ -498,6 +509,7 @@ export function AiBuilderApp() {
           role: "assistant",
           text: payload.reply,
           vision: payload.vision,
+          aiEngine: payload.aiEngine,
           files: payload.project?.files,
         },
       ]);
@@ -1444,6 +1456,23 @@ function ChatBubble(props: { message: ChatMessage; compact: boolean }) {
         </div>
       )}
 
+      {props.message.aiEngine && (
+        <div className="mt-4 rounded-lg border border-white/10 bg-black/25 p-3">
+          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-[#d8ff76]">
+            <Brain className="h-4 w-4" aria-hidden="true" />
+            Motor de IA
+          </div>
+          <p className="text-xs leading-5 text-zinc-300">
+            {formatAiEngineLabel(props.message.aiEngine)}
+          </p>
+          {props.message.aiEngine.agents.length > 0 && (
+            <p className="mt-2 text-[11px] text-zinc-500">
+              Agentes: {props.message.aiEngine.agents.map((agent) => agent.role).join(", ")}
+            </p>
+          )}
+        </div>
+      )}
+
       {props.message.files && props.message.files.length > 0 && (
         <div className="mt-4 grid gap-2">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">
@@ -2007,7 +2036,7 @@ function SettingsModal(props: {
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="grid gap-1.5 text-sm">
-              <span className="text-zinc-400">Qualidade</span>
+              <span className="text-zinc-400">Modo de IA</span>
               <select
                 className="h-11 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
                 onChange={(event) =>
@@ -2015,9 +2044,10 @@ function SettingsModal(props: {
                 }
                 value={draft.settings.generationQuality}
               >
-                <option value="rapida">Rapida</option>
-                <option value="equilibrada">Equilibrada</option>
-                <option value="premium">Premium</option>
+                <option value="auto">Auto</option>
+                <option value="rapido">Rapido</option>
+                <option value="equilibrado">Equilibrado</option>
+                <option value="avancado">Avancado</option>
               </select>
             </label>
             <label className="grid gap-1.5 text-sm">
@@ -2313,6 +2343,16 @@ function formatBytes(value: number) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatAiEngineLabel(aiEngine: AiEngineReport) {
+  if (aiEngine.usedExternal) {
+    return `${aiEngine.provider}/${aiEngine.model} em modo ${aiEngine.resolvedMode} para ${aiEngine.task}.`;
+  }
+
+  return `Fallback local em modo ${aiEngine.resolvedMode}: ${
+    aiEngine.fallbackReason ?? "configure uma chave de IA externa no backend para ativar modelos reais"
+  }.`;
+}
+
 function withPreviewInspector(html: string) {
   const inspector = `<script>
 (() => {
@@ -2533,17 +2573,39 @@ function replaceAccount(accounts: Account[], account: Account) {
 }
 
 function ensureWeeklyTokens(account: Account) {
+  const normalizedAccount = {
+    ...account,
+    settings: normalizeAccountSettings(account.settings),
+  };
   const resetAt = Date.parse(account.tokens.resetAt);
-  if (Number.isNaN(resetAt) || resetAt > Date.now()) return account;
+  if (Number.isNaN(resetAt) || resetAt > Date.now()) return normalizedAccount;
 
   return {
-    ...account,
+    ...normalizedAccount,
     tokens: {
-      remaining: account.tokens.weeklyAllowance,
-      weeklyAllowance: account.tokens.weeklyAllowance,
+      remaining: normalizedAccount.tokens.weeklyAllowance,
+      weeklyAllowance: normalizedAccount.tokens.weeklyAllowance,
       usedThisWeek: 0,
       resetAt: nextWeeklyReset(),
     },
+  };
+}
+
+function normalizeAccountSettings(settings: AccountSettings): AccountSettings {
+  const rawMode = settings.generationQuality as string;
+  const generationQuality: AiModelMode =
+    rawMode === "rapida" || rawMode === "rapido"
+      ? "rapido"
+      : rawMode === "premium" || rawMode === "avancada" || rawMode === "avancado"
+        ? "avancado"
+        : rawMode === "equilibrada" || rawMode === "equilibrado"
+          ? "equilibrado"
+          : "auto";
+
+  return {
+    ...defaultSettings,
+    ...settings,
+    generationQuality,
   };
 }
 

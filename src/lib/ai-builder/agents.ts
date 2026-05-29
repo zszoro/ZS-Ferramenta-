@@ -1,4 +1,9 @@
 export type BuilderAgentId =
+  | "architect"
+  | "designer"
+  | "programmer"
+  | "qa"
+  | "seo"
   | "planning"
   | "ui"
   | "backend"
@@ -15,6 +20,56 @@ export type BuilderAgent = {
 };
 
 export const builderAgents: BuilderAgent[] = [
+  {
+    id: "architect",
+    name: "Arquiteto",
+    mission: "Definir estrutura do projeto, banco de dados, APIs e arquitetura escalavel.",
+    responsibilities: [
+      "modelar entidades e fluxos principais",
+      "definir rotas, contratos e boundaries",
+      "preparar estrutura para producao",
+    ],
+  },
+  {
+    id: "designer",
+    name: "Designer",
+    mission: "Definir layout, UX, UI e animacoes coerentes com o nicho.",
+    responsibilities: [
+      "organizar hierarquia visual",
+      "aplicar identidade e responsividade",
+      "evitar elementos decorativos sem funcao real",
+    ],
+  },
+  {
+    id: "programmer",
+    name: "Programador",
+    mission: "Gerar codigo, componentes, logica e integracoes funcionais.",
+    responsibilities: [
+      "criar componentes e paginas",
+      "corrigir imports, rotas e tipos",
+      "implementar APIs e regras de negocio",
+    ],
+  },
+  {
+    id: "qa",
+    name: "QA",
+    mission: "Encontrar bugs e validar rotas, formularios, APIs e preview.",
+    responsibilities: [
+      "validar build e TypeScript",
+      "testar fluxos principais",
+      "listar riscos antes da entrega",
+    ],
+  },
+  {
+    id: "seo",
+    name: "SEO",
+    mission: "Preparar sitemap, meta tags, performance e indexacao.",
+    responsibilities: [
+      "gerar metadata por pagina",
+      "preparar sitemap e robots",
+      "otimizar conteudo para busca",
+    ],
+  },
   {
     id: "planning",
     name: "Planning Agent",
@@ -90,8 +145,9 @@ export const builderAgents: BuilderAgent[] = [
 export function buildAgentPlan(prompt: string, industry: string) {
   const lower = normalize(prompt);
   const plan = [
-    "Planning Agent: consolidar briefing, nicho, paginas e secoes esperadas.",
-    "UI Agent: escolher layout, imagens, cores e responsividade do preview.",
+    "Arquiteto: consolidar briefing, estrutura, banco, APIs e paginas esperadas.",
+    "Designer: escolher layout, imagens, cores, UX e responsividade do preview.",
+    "Programador: gerar componentes, logica e arquivos funcionais.",
     "Refactor Agent: procurar templates e blocos reutilizaveis antes de criar novos.",
   ];
 
@@ -102,11 +158,11 @@ export function buildAgentPlan(prompt: string, industry: string) {
     lower.includes("pagamento") ||
     lower.includes("sistema")
   ) {
-    plan.push("Backend Agent: preparar contratos de API, autenticacao, banco e seguranca.");
+    plan.push("Arquiteto: preparar contratos de API, autenticacao, banco e seguranca.");
   }
 
   if (lower.includes("erro") || lower.includes("bug") || lower.includes("nao funciona")) {
-    plan.push("Debug Agent: reproduzir o problema e validar a correcao no preview.");
+    plan.push("QA: reproduzir o problema e validar a correcao no preview.");
   }
 
   if (lower.includes("deploy") || lower.includes("vercel") || lower.includes("rollback")) {
@@ -118,7 +174,7 @@ export function buildAgentPlan(prompt: string, industry: string) {
   }
 
   if (industry !== "negocios digitais") {
-    plan.push(`UI Agent: aplicar copy e imagens especificas para ${industry}.`);
+    plan.push(`SEO: preparar termos, meta tags e indexacao para ${industry}.`);
   }
 
   return plan;
