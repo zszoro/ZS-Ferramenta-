@@ -381,7 +381,12 @@ export function AiBuilderApp() {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: messageForAi, project, attachments: imagesForRequest }),
+        body: JSON.stringify({
+          message: messageForAi,
+          project,
+          attachments: imagesForRequest,
+          userName: account.name,
+        }),
       });
       const payload = (await response.json()) as
         | ({ ok: true } & BuilderAssistantResponse)
@@ -468,7 +473,7 @@ export function AiBuilderApp() {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, project, brief, attachments: imagesForRequest }),
+        body: JSON.stringify({ message, project, brief, attachments: imagesForRequest, userName: account.name }),
       });
       const payload = (await response.json()) as
         | ({ ok: true } & BuilderAssistantResponse)

@@ -1,4 +1,5 @@
 import { buildAugmentedPrompt, getReusableTemplateFiles } from "./context";
+import { buildEditDoneReply } from "./responses";
 import type { BuilderImageAttachment, VisionAnalysis, VisionContext, VisionTarget } from "./vision";
 
 export type BuilderFile = {
@@ -129,6 +130,7 @@ export function respondToBuilderMessage(input: {
   project?: BuilderProject | null;
   brief?: ProjectBrief | null;
   vision?: VisionContext | null;
+  userName?: string;
 }): BuilderAssistantResponse {
   const message = input.message.trim();
   const vision = input.vision ?? null;
@@ -172,16 +174,20 @@ export function respondToBuilderMessage(input: {
 
   if (input.project && intent === "edit") {
     const project = editProjectFromPrompt(input.project, message, vision);
+    const editTarget = describeEditTarget(message);
+    const isRemoval = isRemovalPrompt(message);
 
     return {
       mode: "edit",
       project,
       vision: vision?.analysis ?? null,
-      reply: [
-        `Atualizei ${project.name}.`,
-        project.summary,
-        "O preview, os componentes e os arquivos do projeto foram atualizados com essa mudanca.",
-      ].join("\n\n"),
+      reply: buildEditDoneReply({
+        userName: input.userName,
+        projectName: project.name,
+        summary: project.summary,
+        target: editTarget,
+        isRemoval,
+      }),
       suggestions: [
         "Crie uma area de agendamento com horarios.",
         "Adicione uma secao de planos com Mercado Pago.",
@@ -360,18 +366,20 @@ function editProjectFromPrompt(
   const selectedElement = extractSelectedElement(prompt);
   const descriptionOverride = extractDescriptionOverride(intent);
   const imageTarget = extractImageTarget(intent);
+  const removalDirectives = extractRemovalDirectives(prompt);
   const newVisionReferences = buildVisionReferences(vision, now);
   const visionReferences = mergeVisionReferences(
     shouldClearVisionReferences(prompt) ? [] : project.visionReferences ?? [],
     newVisionReferences,
   );
   const requestedName = extractRequestedName(prompt);
-  const requestedKind = extractRequestedKind(prompt);
+  const requestedKind = isRemovalPrompt(prompt) ? null : extractRequestedKind(prompt);
   const requestedPalette = pickEditPalette(prompt) ?? getPalette(project.paletteName);
-  const nextFeatures = mergeFeatures(
+  let nextFeatures = mergeFeatures(
     project.features,
     withVisionFeatures(buildFeatures(appendVisionContext(prompt, vision), requestedKind ?? project.kind, project.industry), vision),
   );
+  nextFeatures = applyFeatureRemovals(nextFeatures, removalDirectives);
 
   let name = project.name;
   if (requestedName) {
@@ -389,6 +397,18 @@ function editProjectFromPrompt(
 
   if (imageTarget) {
     changes.push(`imagem de ${imageTarget} atualizada`);
+  }
+
+  if (removalDirectives.removeAuthSystem) {
+    changes.push("sistema de login removido");
+  }
+
+  if (removalDirectives.removeHeroTitle) {
+    changes.push("titulo central removido");
+  }
+
+  if (removalDirectives.removeAuthTitle) {
+    changes.push("titulo do card de login removido");
   }
 
   if (newVisionReferences.length) {
@@ -516,7 +536,15 @@ function looksLikeEdit(prompt: string) {
     "adicione",
     "coloque",
     "remova",
+    "remover",
+    "retire",
+    "retirar",
     "tire",
+    "tirar",
+    "apague",
+    "apagar",
+    "exclua",
+    "excluir",
     "aumente",
     "diminua",
     "substitua",
@@ -550,6 +578,137 @@ function looksLikeEdit(prompt: string) {
   ];
 
   return editWords.some((word) => lower.includes(word)) && targets.some((word) => lower.includes(word));
+}
+
+type RemovalDirectives = {
+  removeAuthSystem: boolean;
+  removeHeroTitle: boolean;
+  removeAuthTitle: boolean;
+};
+
+function extractRemovalDirectives(prompt: string): RemovalDirectives {
+  const lower = normalize(prompt);
+  const hasRemovalVerb = [
+    "remova",
+    "remover",
+    "retire",
+    "retirar",
+    "tire",
+    "tirar",
+    "apague",
+    "apagar",
+    "exclua",
+    "excluir",
+    "elimine",
+    "deletar",
+    "delete",
+  ].some((word) => lower.includes(word));
+
+  if (!hasRemovalVerb) {
+    return {
+      removeAuthSystem: false,
+      removeHeroTitle: false,
+      removeAuthTitle: false,
+    };
+  }
+
+  const mentionsAuth = [
+    "login",
+    "loguin",
+    "autenticacao",
+    "autenticacao",
+    "cadastro",
+    "entrar",
+    "conta",
+    "area logada",
+    "sistema de login",
+  ].some((word) => lower.includes(word));
+  const mentionsEntireSystem = [
+    "sistema",
+    "inteiro",
+    "ineiro",
+    "inteira",
+    "todo",
+    "completo",
+    "area logada",
+    "autenticacao",
+    "login inteiro",
+  ].some((word) => lower.includes(word));
+  const mentionsTitle = ["titulo", "titilo", "titlo", "title", "h1", "headline", "cabecalho"].some((word) =>
+    lower.includes(word),
+  );
+  const mentionsCentral = ["central", "principal", "hero", "meio"].some((word) => lower.includes(word));
+  const mentionsLoginCard = ["card de login", "modal de login", "tela de login", "login"].some((word) =>
+    lower.includes(word),
+  );
+  const mentionsOnlyAuthRemoval = mentionsAuth && !mentionsTitle;
+
+  return {
+    removeAuthSystem: mentionsAuth && (mentionsEntireSystem || mentionsOnlyAuthRemoval),
+    removeHeroTitle: mentionsTitle && mentionsCentral && !mentionsLoginCard,
+    removeAuthTitle: mentionsTitle && mentionsLoginCard,
+  };
+}
+
+function extractRemovalDirectivesFromHistory(prompt: string): RemovalDirectives {
+  const editSegments = prompt.split(/\nEdicao\s+\d+:\s*/i).slice(1);
+  const segments = editSegments.length ? editSegments : [latestPromptIntent(prompt)];
+
+  return segments.reduce<RemovalDirectives>(
+    (merged, segment) => {
+      const next = extractRemovalDirectives(segment);
+      return {
+        removeAuthSystem: merged.removeAuthSystem || next.removeAuthSystem,
+        removeHeroTitle: merged.removeHeroTitle || next.removeHeroTitle,
+        removeAuthTitle: merged.removeAuthTitle || next.removeAuthTitle,
+      };
+    },
+    {
+      removeAuthSystem: false,
+      removeHeroTitle: false,
+      removeAuthTitle: false,
+    },
+  );
+}
+
+function applyFeatureRemovals(features: string[], removals: RemovalDirectives) {
+  if (!removals.removeAuthSystem) return features;
+
+  return features.filter((feature) => {
+    const lower = normalize(feature);
+    return !lower.includes("autentic") && !lower.includes("logada") && !lower.includes("login");
+  });
+}
+
+function isRemovalPrompt(prompt: string) {
+  const removals = extractRemovalDirectivesFromHistory(prompt);
+  if (removals.removeAuthSystem || removals.removeHeroTitle || removals.removeAuthTitle) return true;
+
+  const lower = normalize(prompt);
+  return ["remova", "remover", "retire", "retirar", "tire", "tirar", "apague", "apagar", "exclua"].some(
+    (word) => lower.includes(word),
+  );
+}
+
+function describeEditTarget(prompt: string) {
+  const removals = extractRemovalDirectivesFromHistory(prompt);
+  if (removals.removeAuthSystem) return "o sistema de login inteiro";
+  if (removals.removeHeroTitle) return "o titulo central";
+  if (removals.removeAuthTitle) return "o titulo do card de login";
+
+  const selectedElement = extractSelectedElement(prompt);
+  if (selectedElement) return selectedElement;
+
+  const lower = normalize(prompt);
+  if (lower.includes("cor")) return "as cores do site";
+  if (lower.includes("imagem") || lower.includes("foto") || lower.includes("banner")) return "a imagem solicitada";
+  if (lower.includes("titulo") || lower.includes("headline")) return "o titulo solicitado";
+  if (lower.includes("descricao") || lower.includes("subtitulo")) return "o texto principal";
+  if (lower.includes("botao") || lower.includes("cta")) return "o botao solicitado";
+  if (lower.includes("secao") || lower.includes("seção")) return "a secao solicitada";
+  if (lower.includes("login")) return "o login";
+
+  return undefined;
 }
 
 function looksLikeVisionBuild(prompt: string) {
@@ -1748,6 +1907,7 @@ button { font: inherit; }
   background: rgba(35, 22, 12, 0.52);
   backdrop-filter: blur(16px);
 }
+.auth-backdrop[hidden], .cart-drawer[hidden] { display: none !important; }
 .auth-modal, .cart-drawer {
   position: relative;
   width: min(420px, calc(100vw - 32px));
@@ -1837,8 +1997,7 @@ button { font: inherit; }
   .brand { min-width: 0; }
   .brand__mark { width: 38px; height: 38px; }
   .brand__text small, .header-cta { display: none; }
-  .login-cta { display: none; }
-  .cart-toggle { min-height: 40px; padding: 0 10px; font-size: 0.78rem; }
+  .login-cta, .cart-toggle { min-height: 40px; padding: 0 10px; font-size: 0.78rem; }
   .hero { gap: 36px; padding-top: calc(var(--header-height) + 44px); padding-bottom: 58px; }
   .hero__content h1 { font-size: clamp(2.68rem, 16vw, 4.2rem); }
   .hero__actions { display: grid; }
@@ -1985,6 +2144,12 @@ export default function Page() {
       content: buildGeneratedHeaderSource(slug),
     },
     {
+      path: `src/components/generated/${slug}/LoginRegisterModal.tsx`,
+      language: "tsx",
+      description: "Login e cadastro local funcionais, abertos somente por Entrar ou compra.",
+      content: buildGeneratedLoginRegisterModalSource(slug),
+    },
+    {
       path: `src/components/generated/${slug}/Hero.tsx`,
       language: "tsx",
       description: "Hero responsivo com título, subtítulo, imagem e CTAs únicos.",
@@ -2020,6 +2185,12 @@ export default function Page() {
       description: "Configuração editável do site com textos, cores, imagens, contato e produtos.",
       content: buildGeneratedConfigSource(name, kind, features, prompt, brief, visionReferences),
     },
+    {
+      path: `src/lib/generated/${slug}-local-auth.ts`,
+      language: "ts",
+      description: "Autenticacao local em localStorage para demo sem backend obrigatorio.",
+      content: buildGeneratedLocalAuthSource(),
+    },
   ];
 }
 
@@ -2028,12 +2199,14 @@ function buildGeneratedSiteIndexSource(slug: string, component: string) {
 
 import type { CSSProperties, FormEvent } from "react";
 import { useMemo, useState } from "react";
+import { clearStoredUser, getStoredUser, type LocalAuthUser } from "@/lib/generated/${slug}-local-auth";
 import { generatedSiteConfig, type GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
 import { ContactSection } from "./ContactSection";
 import { Features } from "./Features";
 import { Footer } from "./Footer";
 import { Header } from "./Header";
 import { Hero } from "./Hero";
+import { LoginRegisterModal } from "./LoginRegisterModal";
 import { SiteEditor } from "./SiteEditor";
 
 type Product = GeneratedSiteConfig["products"][number];
@@ -2048,6 +2221,11 @@ export function ${component}() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authReason, setAuthReason] = useState<"header" | "purchase">("header");
+  const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
+  const [authUser, setAuthUser] = useState<LocalAuthUser | null>(() =>
+    getStoredUser(generatedSiteConfig.auth.storageKey),
+  );
 
   const whatsappHref = useMemo(() => {
     const digits = site.contact.whatsapp.replace(/\\D/g, "");
@@ -2086,7 +2264,7 @@ export function ${component}() {
     }));
   }
 
-  function addToCart(product: Product) {
+  function commitAddToCart(product: Product) {
     setCart((current) => {
       const existing = current.find((item) => item.product.name === product.name);
       if (existing) {
@@ -2098,6 +2276,38 @@ export function ${component}() {
       return [...current, { product, quantity: 1 }];
     });
     setIsCartOpen(true);
+  }
+
+  function requestAuth(reason: "header" | "purchase", product?: Product) {
+    if (!site.auth.enabled) return false;
+    setAuthReason(reason);
+    setPendingProduct(product ?? null);
+    setIsAuthOpen(true);
+    return true;
+  }
+
+  function addToCart(product: Product) {
+    if (site.auth.enabled && site.auth.requireForPurchase && !authUser) {
+      requestAuth("purchase", product);
+      return;
+    }
+
+    commitAddToCart(product);
+  }
+
+  function handleAuthSuccess(user: LocalAuthUser) {
+    setAuthUser(user);
+    setIsAuthOpen(false);
+
+    if (pendingProduct) {
+      commitAddToCart(pendingProduct);
+      setPendingProduct(null);
+    }
+  }
+
+  function logout() {
+    clearStoredUser(site.auth.storageKey);
+    setAuthUser(null);
   }
 
   function updateCartQuantity(productName: string, quantity: number) {
@@ -2128,16 +2338,29 @@ export function ${component}() {
     >
       <Header
         cartCount={cartCount}
+        authEnabled={site.auth.enabled}
+        authUserName={authUser?.name}
         site={site}
         whatsappHref={whatsappHref}
         onCartClick={() => setIsCartOpen(true)}
-        onLoginClick={() => setIsAuthOpen(true)}
+        onLoginClick={() => requestAuth("header")}
+        onLogoutClick={logout}
       />
       <Hero site={site} whatsappHref={whatsappHref} />
       <Features site={site} whatsappHref={whatsappHref} onAddToCart={addToCart} />
       <ContactSection site={site} whatsappHref={whatsappHref} />
       <Footer site={site} />
-      {isAuthOpen ? <AuthModal site={site} onClose={() => setIsAuthOpen(false)} /> : null}
+      {site.auth.enabled && isAuthOpen ? (
+        <LoginRegisterModal
+          reason={authReason}
+          site={site}
+          onClose={() => {
+            setIsAuthOpen(false);
+            setPendingProduct(null);
+          }}
+          onSuccess={handleAuthSuccess}
+        />
+      ) : null}
       <CartDrawer
         cart={cart}
         checkoutHref={checkoutHref}
@@ -2271,6 +2494,211 @@ function CartDrawer(props: {
 `;
 }
 
+function buildGeneratedLocalAuthSource() {
+  return `export type LocalAuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+};
+
+type LocalAuthRecord = LocalAuthUser & {
+  passwordHash: string;
+};
+
+type AuthResult =
+  | { ok: true; user: LocalAuthUser }
+  | { ok: false; error: string };
+
+function usersKey(storageKey: string) {
+  return storageKey + ":users";
+}
+
+function activeKey(storageKey: string) {
+  return storageKey + ":active";
+}
+
+export function getStoredUser(storageKey: string): LocalAuthUser | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(activeKey(storageKey));
+    return raw ? (JSON.parse(raw) as LocalAuthUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearStoredUser(storageKey: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(activeKey(storageKey));
+}
+
+export function registerLocalUser(
+  storageKey: string,
+  input: { name: string; email: string; password: string },
+): AuthResult {
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+
+  if (name.length < 2) return { ok: false, error: "Digite seu nome." };
+  if (!email.includes("@")) return { ok: false, error: "Digite um email valido." };
+  if (input.password.length < 6) return { ok: false, error: "A senha precisa ter pelo menos 6 caracteres." };
+
+  const users = readUsers(storageKey);
+  if (users.some((user) => user.email === email)) {
+    return { ok: false, error: "Esse email ja tem cadastro local. Entre com a senha." };
+  }
+
+  const user: LocalAuthRecord = {
+    id: "local_" + Date.now().toString(36),
+    name,
+    email,
+    passwordHash: demoHash(input.password),
+    createdAt: new Date().toISOString(),
+  };
+  const nextUsers = [...users, user];
+  window.localStorage.setItem(usersKey(storageKey), JSON.stringify(nextUsers));
+  saveActiveUser(storageKey, user);
+  return { ok: true, user: toPublicUser(user) };
+}
+
+export function loginLocalUser(
+  storageKey: string,
+  input: { email: string; password: string },
+): AuthResult {
+  const email = input.email.trim().toLowerCase();
+  const users = readUsers(storageKey);
+  const user = users.find((item) => item.email === email);
+
+  if (!user || user.passwordHash !== demoHash(input.password)) {
+    return { ok: false, error: "Email ou senha invalidos para esta demo local." };
+  }
+
+  saveActiveUser(storageKey, user);
+  return { ok: true, user: toPublicUser(user) };
+}
+
+function saveActiveUser(storageKey: string, user: LocalAuthRecord) {
+  window.localStorage.setItem(activeKey(storageKey), JSON.stringify(toPublicUser(user)));
+}
+
+function readUsers(storageKey: string): LocalAuthRecord[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(usersKey(storageKey));
+    return raw ? (JSON.parse(raw) as LocalAuthRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function toPublicUser(user: LocalAuthRecord): LocalAuthUser {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    createdAt: user.createdAt,
+  };
+}
+
+function demoHash(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+  return btoa(binary).split("").reverse().join("");
+}
+`;
+}
+
+function buildGeneratedLoginRegisterModalSource(slug: string) {
+  return `"use client";
+
+import { useState } from "react";
+import type { FormEvent } from "react";
+import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
+import {
+  loginLocalUser,
+  registerLocalUser,
+  type LocalAuthUser,
+} from "@/lib/generated/${slug}-local-auth";
+
+type LoginRegisterModalProps = {
+  reason: "header" | "purchase";
+  site: GeneratedSiteConfig;
+  onClose: () => void;
+  onSuccess: (user: LocalAuthUser) => void;
+};
+
+export function LoginRegisterModal({ reason, site, onClose, onSuccess }: LoginRegisterModalProps) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [status, setStatus] = useState("");
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const payload = {
+      name: String(form.get("name") ?? "").trim(),
+      email: String(form.get("email") ?? "").trim(),
+      password: String(form.get("password") ?? ""),
+    };
+    const result =
+      mode === "register"
+        ? registerLocalUser(site.auth.storageKey, payload)
+        : loginLocalUser(site.auth.storageKey, payload);
+
+    if (!result.ok) {
+      setStatus(result.error);
+      return;
+    }
+
+    setStatus(mode === "register" ? "Conta local criada." : "Login local realizado.");
+    onSuccess(result.user);
+  }
+
+  return (
+    <div className="auth-backdrop" role="dialog" aria-modal="true" aria-label="Entrar na conta">
+      <section className="auth-modal">
+        <button className="modal-close" onClick={onClose} type="button" aria-label="Fechar login">
+          ×
+        </button>
+        <span className="section-heading__line" />
+        {site.auth.modalTitle ? <h2>{mode === "login" ? site.auth.modalTitle : "Criar conta"}</h2> : null}
+        <p>
+          {reason === "purchase"
+            ? "Entre ou crie uma conta local para continuar a compra."
+            : "Acesse sua conta local para acompanhar compras e agendamentos."}
+        </p>
+        <form onSubmit={submit}>
+          {mode === "register" ? (
+            <label>
+              Nome
+              <input name="name" placeholder="Seu nome" />
+            </label>
+          ) : null}
+          <label>
+            Email
+            <input name="email" placeholder="voce@email.com" type="email" />
+          </label>
+          <label>
+            Senha
+            <input name="password" placeholder="Minimo 6 caracteres" type="password" />
+          </label>
+          {status ? <strong className="auth-status">{status}</strong> : null}
+          <button className="button button--primary" type="submit">
+            {mode === "login" ? "Entrar" : "Cadastrar"}
+          </button>
+        </form>
+        <button className="auth-switch" onClick={() => setMode(mode === "login" ? "register" : "login")} type="button">
+          {mode === "login" ? "Nao tenho conta, cadastrar" : "Ja tenho conta, entrar"}
+        </button>
+      </section>
+    </div>
+  );
+}
+`;
+}
+
 function buildGeneratedHeaderSource(slug: string) {
   return `"use client";
 
@@ -2279,13 +2707,25 @@ import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
 
 type HeaderProps = {
   cartCount: number;
+  authEnabled: boolean;
+  authUserName?: string;
   site: GeneratedSiteConfig;
   whatsappHref: string;
   onCartClick: () => void;
   onLoginClick: () => void;
+  onLogoutClick: () => void;
 };
 
-export function Header({ cartCount, site, whatsappHref, onCartClick, onLoginClick }: HeaderProps) {
+export function Header({
+  cartCount,
+  authEnabled,
+  authUserName,
+  site,
+  whatsappHref,
+  onCartClick,
+  onLoginClick,
+  onLogoutClick,
+}: HeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
   const brandInitial = site.name.trim().charAt(0).toUpperCase() || "Z";
@@ -2330,9 +2770,17 @@ export function Header({ cartCount, site, whatsappHref, onCartClick, onLoginClic
         >
           {site.headerCta}
         </a>
-        <button className="login-cta" onClick={onLoginClick} type="button">
-          Entrar
-        </button>
+        {authEnabled ? (
+          authUserName ? (
+            <button className="login-cta" onClick={onLogoutClick} type="button">
+              Sair
+            </button>
+          ) : (
+            <button className="login-cta" onClick={onLoginClick} type="button">
+              Entrar
+            </button>
+          )
+        ) : null}
         <button className="cart-toggle" onClick={onCartClick} type="button" aria-label="Abrir carrinho">
           Carrinho <span>{cartCount}</span>
         </button>
@@ -2358,9 +2806,11 @@ export function Hero({ site, whatsappHref }: HeroProps) {
   return (
     <section className="hero section" id="inicio">
       <div className="hero__content reveal">
-        <h1>
-          {site.hero.title}
-        </h1>
+        {site.hero.title ? (
+          <h1>
+            {site.hero.title}
+          </h1>
+        ) : null}
         <p>
           {site.hero.subtitle}
         </p>
@@ -2497,7 +2947,7 @@ export function Features({ site, whatsappHref, onAddToCart }: FeaturesProps) {
                   </div>
                   <p>{product.description}</p>
                   <button className="product-card__cart" onClick={() => onAddToCart(product)} type="button">
-                    Adicionar ao carrinho
+                    Comprar
                   </button>
                 </div>
               </article>
@@ -2812,6 +3262,12 @@ function buildGeneratedConfigSource(
     address: string;
     hours: string;
   };
+  auth: {
+    enabled: boolean;
+    requireForPurchase: boolean;
+    modalTitle: string;
+    storageKey: string;
+  };
   social: Array<{ label: string; href: string }>;
 };
 
@@ -2837,6 +3293,7 @@ function buildGeneratedConfig(
   const nicheLabel = brief?.niche?.trim() || industry;
   const copy = buildTemplateCopy(industry, siteName, nicheLabel, features);
   const theme = buildTemplateTheme(industry, palette, brief?.primaryColor);
+  const removals = extractRemovalDirectivesFromHistory(prompt);
   const differentials = copy.differentials.slice(0, 4).map((item, index) => ({
     code: String(index + 1).padStart(2, "0"),
     ...item,
@@ -2860,7 +3317,10 @@ function buildGeneratedConfig(
       { label: "Depoimentos", href: "#depoimentos" },
       { label: "Contato", href: "#contato" },
     ],
-    hero: copy.hero,
+    hero: {
+      ...copy.hero,
+      title: removals.removeHeroTitle ? "" : copy.hero.title,
+    },
     about: copy.about,
     images: {
       hero: media.hero,
@@ -2884,6 +3344,12 @@ function buildGeneratedConfig(
       email,
       address: copy.address,
       hours: copy.hours,
+    },
+    auth: {
+      enabled: !removals.removeAuthSystem,
+      requireForPurchase: true,
+      modalTitle: removals.removeAuthTitle ? "" : `Entrar em ${siteName}`,
+      storageKey: `generated-auth-${slugify(siteName)}`,
     },
     social: [
       { label: "Instagram", href: "#" },
@@ -4304,6 +4770,14 @@ function buildSiteReferencePreviewHtml(input: {
   const whatsappHref = buildPreviewWhatsappHref(config.contact.whatsapp, config.whatsappMessage, contact.primaryHref);
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
   const titleStyle = directives.titleColor ? ` style="color:${escapeHtml(directives.titleColor)}"` : "";
+  const heroTitle = config.hero.title ? `<h1${titleStyle}>${escapeHtml(config.hero.title)}</h1>` : "";
+  const loginButton = config.auth.enabled
+    ? `<button class="login-cta" type="button" data-open-auth>Entrar</button>`
+    : "";
+  const authTitle = config.auth.modalTitle ? `<h2 data-auth-title>${escapeHtml(config.auth.modalTitle)}</h2>` : "";
+  const authModal = config.auth.enabled
+    ? `<div class="auth-backdrop" hidden data-auth-modal><section class="auth-modal"><button class="modal-close" type="button" aria-label="Fechar login" data-close-auth>&times;</button><span class="section-heading__line"></span>${authTitle}<p data-auth-copy>Entre ou crie uma conta local para continuar.</p><form data-auth-form><label data-name-field hidden>Nome<input name="name" placeholder="Seu nome" /></label><label>Email<input name="email" type="email" placeholder="voce@email.com" /></label><label>Senha<input name="password" type="password" placeholder="Minimo 6 caracteres" /></label><strong class="auth-status" data-auth-status></strong><button class="button button--primary" type="submit" data-auth-submit>Entrar</button></form><button class="auth-switch" type="button" data-auth-switch>Nao tenho conta, cadastrar</button></section></div>`
+    : "";
   const bodyStyle = buildPreviewVariableStyle(config.theme);
   const navItems = config.navigation
     .map((item) => `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`)
@@ -4351,7 +4825,7 @@ function buildSiteReferencePreviewHtml(input: {
       <nav class="main-nav" aria-label="Menu principal" data-nav>${navItems}</nav>
       <div class="header-actions">
         <a class="header-cta" href="${escapeHtml(whatsappHref)}"${isExternalWhatsapp ? ' target="_blank" rel="noreferrer"' : ""}>${escapeHtml(config.headerCta)}</a>
-        <button class="login-cta" type="button" data-open-auth>Entrar</button>
+        ${loginButton}
         <button class="cart-toggle" type="button" data-open-cart>Carrinho <span data-cart-count>0</span></button>
       </div>
     </header>
@@ -4359,7 +4833,7 @@ function buildSiteReferencePreviewHtml(input: {
     <main>
       <section class="hero section" id="inicio">
         <div class="hero__content reveal">
-          <h1${titleStyle}>${escapeHtml(config.hero.title)}</h1>
+          ${heroTitle}
           <p>${escapeHtml(config.hero.subtitle)}</p>
           <div class="hero__actions" aria-label="Acoes principais">
             <a class="button button--primary" href="${escapeHtml(whatsappHref)}"${isExternalWhatsapp ? ' target="_blank" rel="noreferrer"' : ""}>${escapeHtml(config.hero.primaryCta)}</a>
@@ -4406,7 +4880,7 @@ function buildSiteReferencePreviewHtml(input: {
 
     <footer class="site-footer"><div class="footer__brand"><strong>${escapedName}</strong><span>${escapeHtml(config.brandTagline)}</span></div><nav class="footer__links" aria-label="Links rapidos"><a href="#inicio">Início</a><a href="#sobre">Sobre</a><a href="#produtos">Produtos</a><a href="#contato">Contato</a></nav><div class="footer__social" aria-label="Redes sociais"><a href="#" aria-label="Instagram">Ig</a><a href="#" aria-label="Facebook">Fb</a><a href="#" aria-label="WhatsApp">Wa</a></div><p>${escapeHtml(config.footerText)}</p></footer>
 
-    <div class="auth-backdrop" hidden data-auth-modal><section class="auth-modal"><button class="modal-close" type="button" aria-label="Fechar login" data-close-auth>×</button><span class="section-heading__line"></span><h2 data-auth-title>Entrar em ${escapedName}</h2><p>Acesso preparado para clientes acompanharem pedidos, compras e agendamentos.</p><form data-auth-form><label data-name-field hidden>Nome<input name="name" placeholder="Seu nome" /></label><label>Email<input name="email" type="email" placeholder="voce@email.com" /></label><label>Senha<input name="password" type="password" placeholder="Minimo 6 caracteres" /></label><strong class="auth-status" data-auth-status></strong><button class="button button--primary" type="submit" data-auth-submit>Entrar</button></form><button class="auth-switch" type="button" data-auth-switch>Não tenho conta, cadastrar</button></section></div>
+    ${authModal}
     <aside class="cart-drawer" hidden data-cart-drawer><button class="modal-close" type="button" aria-label="Fechar carrinho" data-close-cart>×</button><span class="section-heading__line"></span><h2>Carrinho</h2><div class="cart-list" data-cart-list><p>Adicione produtos para montar o pedido.</p></div></aside>
     <script>${buildPreviewTemplateScript(config, whatsappHref)}</script>
   </body>
@@ -4437,19 +4911,27 @@ function buildPreviewWhatsappHref(phone: string, message: string, fallback: stri
 }
 
 function buildPreviewProductCard(product: ReturnType<typeof buildGeneratedConfig>["products"][number]) {
-  return `<article class="product-card reveal" data-product-card data-category="${escapeHtml(product.category)}"><div class="product-card__media" style="background-image:url('${escapeHtml(product.image)}');background-position:center;background-size:cover" role="img" aria-label="${escapeHtml(product.imageAlt)}"></div><div class="product-card__body"><span class="product-card__category">${escapeHtml(product.category)}</span><div class="product-card__top"><h3>${escapeHtml(product.name)}</h3><span class="product-card__price">${escapeHtml(product.price)}</span></div><p>${escapeHtml(product.description)}</p><button class="product-card__cart" type="button" data-add-cart="${escapeHtml(product.name)}">Adicionar ao carrinho</button></div></article>`;
+  return `<article class="product-card reveal" data-product-card data-category="${escapeHtml(product.category)}"><div class="product-card__media" style="background-image:url('${escapeHtml(product.image)}');background-position:center;background-size:cover" role="img" aria-label="${escapeHtml(product.imageAlt)}"></div><div class="product-card__body"><span class="product-card__category">${escapeHtml(product.category)}</span><div class="product-card__top"><h3>${escapeHtml(product.name)}</h3><span class="product-card__price">${escapeHtml(product.price)}</span></div><p>${escapeHtml(product.description)}</p><button class="product-card__cart" type="button" data-add-cart="${escapeHtml(product.name)}">Comprar</button></div></article>`;
 }
 
 function buildPreviewTemplateScript(config: ReturnType<typeof buildGeneratedConfig>, whatsappHref: string) {
   const productsJson = JSON.stringify(config.products).replace(/</g, "\\u003c");
   const siteName = JSON.stringify(config.name);
+  const authConfigJson = JSON.stringify(config.auth).replace(/</g, "\\u003c");
   return `
 const products = ${productsJson};
 const siteName = ${siteName};
 const baseWhatsappHref = ${JSON.stringify(whatsappHref)};
+const authConfig = ${authConfigJson};
+const authUsersKey = authConfig.storageKey + ":users";
+const authActiveKey = authConfig.storageKey + ":active";
 let selectedCategory = "Todos";
 let cart = [];
 let authMode = "login";
+let fallbackUsers = [];
+let fallbackActiveUser = null;
+let authUser = readAuthUser();
+let pendingProductName = null;
 function priceToNumber(price) {
   const normalized = String(price).replace(/[^\\d,.-]/g, "").replace(/\\.(?=\\d{3})/g, "").replace(",", ".");
   const value = Number.parseFloat(normalized);
@@ -4457,6 +4939,119 @@ function priceToNumber(price) {
 }
 function formatCurrency(value) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+function demoHash(value) {
+  let hash = 0;
+  const text = String(value);
+  for (let index = 0; index < text.length; index += 1) {
+    hash = Math.imul(hash, 31) + text.charCodeAt(index);
+  }
+  return String(hash >>> 0);
+}
+function readUsers() {
+  try {
+    return JSON.parse(window.localStorage.getItem(authUsersKey) || "[]");
+  } catch {
+    return fallbackUsers;
+  }
+}
+function writeUsers(users) {
+  fallbackUsers = users;
+  try {
+    window.localStorage.setItem(authUsersKey, JSON.stringify(users));
+  } catch {
+    // Sandbox previews can block localStorage; keep the local demo alive in memory.
+  }
+}
+function toPublicUser(user) {
+  return { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt };
+}
+function readAuthUser() {
+  try {
+    const raw = window.localStorage.getItem(authActiveKey);
+    return raw ? JSON.parse(raw) : fallbackActiveUser;
+  } catch {
+    return fallbackActiveUser;
+  }
+}
+function setActiveUser(user) {
+  authUser = toPublicUser(user);
+  fallbackActiveUser = authUser;
+  try {
+    window.localStorage.setItem(authActiveKey, JSON.stringify(authUser));
+  } catch {
+    // Sandbox previews can block localStorage; keep the local demo alive in memory.
+  }
+  updateAuthButton();
+}
+function updateAuthButton() {
+  const button = document.querySelector("[data-open-auth]");
+  if (!button) return;
+  if (authUser) {
+    button.textContent = "Sair";
+    button.dataset.logout = "true";
+    button.setAttribute("aria-label", "Sair da conta local");
+    return;
+  }
+  button.textContent = "Entrar";
+  delete button.dataset.logout;
+  button.setAttribute("aria-label", "Entrar na conta");
+}
+function registerLocalUser(input) {
+  const name = String(input.name || "").trim();
+  const email = String(input.email || "").trim().toLowerCase();
+  const password = String(input.password || "");
+  if (name.length < 2) return { ok: false, error: "Digite seu nome." };
+  if (!email.includes("@")) return { ok: false, error: "Digite um email valido." };
+  if (password.length < 6) return { ok: false, error: "A senha precisa ter pelo menos 6 caracteres." };
+  const users = readUsers();
+  if (users.some((user) => user.email === email)) {
+    return { ok: false, error: "Esse email ja tem cadastro local. Entre com a senha." };
+  }
+  const user = {
+    id: "local_" + Date.now().toString(36),
+    name,
+    email,
+    passwordHash: demoHash(password),
+    createdAt: new Date().toISOString(),
+  };
+  writeUsers([...users, user]);
+  return { ok: true, user };
+}
+function loginLocalUser(input) {
+  const email = String(input.email || "").trim().toLowerCase();
+  const password = String(input.password || "");
+  const user = readUsers().find((item) => item.email === email);
+  if (!user || user.passwordHash !== demoHash(password)) {
+    return { ok: false, error: "Email ou senha invalidos para esta demo local." };
+  }
+  return { ok: true, user };
+}
+function setAuthStatus(message) {
+  const status = document.querySelector("[data-auth-status]");
+  if (status) status.textContent = message;
+}
+function setAuthCopy(reason) {
+  const copy = document.querySelector("[data-auth-copy]");
+  if (!copy) return;
+  copy.textContent =
+    reason === "purchase"
+      ? "Entre ou crie uma conta local para continuar a compra."
+      : "Acesse sua conta local para acompanhar compras e agendamentos.";
+}
+function openAuth(reason, productName) {
+  if (!authConfig.enabled) return;
+  pendingProductName = productName || null;
+  const modal = document.querySelector("[data-auth-modal]");
+  if (!modal) return;
+  modal.hidden = false;
+  setAuthCopy(reason);
+  setAuthMode("login");
+}
+function closeAuth(clearPending) {
+  const modal = document.querySelector("[data-auth-modal]");
+  if (modal) modal.hidden = true;
+  if (clearPending !== false) pendingProductName = null;
 }
 function renderProducts() {
   document.querySelectorAll("[data-product-card]").forEach((card) => {
@@ -4493,6 +5088,10 @@ function buildCheckoutHref(total) {
 function addToCart(productName) {
   const product = products.find((item) => item.name === productName);
   if (!product) return;
+  if (authConfig.enabled && authConfig.requireForPurchase && !authUser) {
+    openAuth("purchase", productName);
+    return;
+  }
   const existing = cart.find((item) => item.product.name === productName);
   if (existing) existing.quantity += 1;
   else cart.push({ product, quantity: 1 });
@@ -4502,10 +5101,15 @@ function addToCart(productName) {
 function setAuthMode(nextMode) {
   authMode = nextMode;
   const register = authMode === "register";
-  document.querySelector("[data-auth-title]").textContent = register ? "Criar conta" : "Entrar em " + siteName;
-  document.querySelector("[data-auth-submit]").textContent = register ? "Cadastrar" : "Entrar";
-  document.querySelector("[data-auth-switch]").textContent = register ? "Já tenho conta, entrar" : "Não tenho conta, cadastrar";
-  document.querySelector("[data-name-field]").hidden = !register;
+  const title = document.querySelector("[data-auth-title]");
+  const submit = document.querySelector("[data-auth-submit]");
+  const switchButton = document.querySelector("[data-auth-switch]");
+  const nameField = document.querySelector("[data-name-field]");
+  if (title) title.textContent = register ? "Criar conta" : authConfig.modalTitle || "Entrar em " + siteName;
+  if (submit) submit.textContent = register ? "Cadastrar" : "Entrar";
+  if (switchButton) switchButton.textContent = register ? "Ja tenho conta, entrar" : "Nao tenho conta, cadastrar";
+  if (nameField) nameField.hidden = !register;
+  setAuthStatus("");
 }
 function setupNavigation() {
   const nav = document.querySelector("[data-nav]");
@@ -4537,23 +5141,51 @@ document.addEventListener("click", (event) => {
   if (dec) { cart = cart.map((item) => item.product.name === dec.dataset.dec ? { ...item, quantity: item.quantity - 1 } : item).filter((item) => item.quantity > 0); renderCart(); return; }
   if (event.target.closest("[data-open-cart]")) { document.querySelector("[data-cart-drawer]").hidden = false; renderCart(); return; }
   if (event.target.closest("[data-close-cart]")) { document.querySelector("[data-cart-drawer]").hidden = true; return; }
-  if (event.target.closest("[data-open-auth]")) { document.querySelector("[data-auth-modal]").hidden = false; setAuthMode("login"); return; }
-  if (event.target.closest("[data-close-auth]")) { document.querySelector("[data-auth-modal]").hidden = true; return; }
+  const authTrigger = event.target.closest("[data-open-auth]");
+  if (authTrigger) {
+    if (authTrigger.dataset.logout === "true") {
+      fallbackActiveUser = null;
+      try {
+        window.localStorage.removeItem(authActiveKey);
+      } catch {
+        // Sandbox previews can block localStorage.
+      }
+      authUser = null;
+      updateAuthButton();
+      return;
+    }
+    openAuth("header");
+    return;
+  }
+  if (event.target.closest("[data-close-auth]")) { closeAuth(true); return; }
   if (event.target.closest("[data-auth-switch]")) { setAuthMode(authMode === "login" ? "register" : "login"); return; }
 });
 document.addEventListener("submit", (event) => {
   if (!event.target.matches("[data-auth-form]")) return;
   event.preventDefault();
   const form = new FormData(event.target);
-  const email = String(form.get("email") || "");
-  const password = String(form.get("password") || "");
-  const name = String(form.get("name") || "");
-  const valid = email.includes("@") && password.length >= 6 && (authMode === "login" || name.trim().length >= 2);
-  document.querySelector("[data-auth-status]").textContent = valid ? (authMode === "login" ? "Login pronto para conectar ao backend." : "Cadastro pronto para conectar ao backend.") : "Preencha os dados corretamente.";
+  const payload = {
+    email: String(form.get("email") || ""),
+    password: String(form.get("password") || ""),
+    name: String(form.get("name") || ""),
+  };
+  const result = authMode === "register" ? registerLocalUser(payload) : loginLocalUser(payload);
+  if (!result.ok) {
+    setAuthStatus(result.error);
+    return;
+  }
+  setActiveUser(result.user);
+  closeAuth(false);
+  if (pendingProductName) {
+    const productName = pendingProductName;
+    pendingProductName = null;
+    addToCart(productName);
+  }
 });
 setupNavigation();
 renderProducts();
-renderCart();`;
+renderCart();
+updateAuthButton();`;
 }
 
 function buildPreviewHighlights(industry: string) {

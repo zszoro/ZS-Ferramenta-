@@ -8,6 +8,7 @@ export async function POST(request: Request) {
     project?: BuilderProject | null;
     brief?: ProjectBrief | null;
     attachments?: unknown;
+    userName?: string;
   };
   const parsedAttachments = parseVisionAttachments(body.attachments);
 
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
     project: body.project ?? null,
     brief: body.brief ?? null,
     vision,
+    userName: body.userName,
   });
 
   return Response.json({

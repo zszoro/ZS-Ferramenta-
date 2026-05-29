@@ -73,32 +73,10 @@ export function getReusableTemplateFiles(slug: string): ReadyTemplateFile[] {
     {
       path: `src/components/generated/${slug}/login-register-modal.tsx`,
       language: "tsx",
-      description: "Modal reutilizavel de login e cadastro com validacao local.",
-      content: `type LoginRegisterModalProps = {
-  mode: "login" | "register";
-  brandName: string;
-  onClose: () => void;
-  onSubmit: (data: { name?: string; email: string; password: string }) => void;
-};
-
-export function LoginRegisterModal(props: LoginRegisterModalProps) {
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur">
-      <form className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-        <button className="float-right text-zinc-500" type="button" onClick={props.onClose}>
-          Fechar
-        </button>
-        <h2 className="text-2xl font-black">{props.brandName}</h2>
-        {props.mode === "register" && <input className="mt-5 w-full rounded-xl border p-3" placeholder="Nome" />}
-        <input className="mt-3 w-full rounded-xl border p-3" placeholder="Email" type="email" />
-        <input className="mt-3 w-full rounded-xl border p-3" placeholder="Senha" type="password" />
-        <button className="mt-5 w-full rounded-xl bg-black p-3 font-bold text-white" type="submit">
-          {props.mode === "login" ? "Entrar" : "Cadastrar"}
-        </button>
-      </form>
-    </div>
-  );
-}`,
+      description: "Atalho para o modal completo de login local gerado.",
+      content: `export { LoginRegisterModal } from "./LoginRegisterModal";
+export type { LocalAuthUser } from "@/lib/generated/${slug}-local-auth";
+`,
     },
     {
       path: `src/components/generated/${slug}/pricing-modal.tsx`,
