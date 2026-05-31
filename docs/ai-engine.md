@@ -41,6 +41,8 @@ O caminho gratuito mais simples e usar o OpenRouter Free Models Router:
 
 Com isso, o backend usa `openrouter/free`, que roteia para modelos gratuitos disponiveis. A disponibilidade e os limites podem variar, entao o fallback local continua ativo para nao quebrar o chat.
 
+O app tambem expõe `GET /api/ai/models`, que busca a lista atual de modelos gratuitos no OpenRouter e alimenta o seletor `Modelo gratis` nas configuracoes da conta.
+
 Para usar modelos pagos ou especificos depois, defina `ZS_AI_FREE_MODE=false` e configure `OPENROUTER_MODEL_RAPIDO`, `OPENROUTER_MODEL_EQUILIBRADO`, `OPENROUTER_MODEL_AVANCADO` e `OPENROUTER_MODEL_CODE`.
 
 ## Multiagente

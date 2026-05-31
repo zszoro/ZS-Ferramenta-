@@ -12,6 +12,7 @@ export async function POST(request: Request) {
     attachments?: unknown;
     userName?: string;
     modelMode?: AiModelMode | string;
+    modelId?: string | null;
   };
   const parsedAttachments = parseVisionAttachments(body.attachments);
 
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
     vision,
     userName: body.userName,
     modelMode: body.modelMode,
+    modelId: body.modelId,
   });
   await rememberProjectEvent({
     mode: result.mode,

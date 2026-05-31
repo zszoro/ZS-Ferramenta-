@@ -3,7 +3,11 @@ import { rememberProjectEvent } from "@/lib/ai-builder/project-memory";
 import type { AiModelMode } from "@/lib/ai-builder/engine-types";
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as { prompt?: string; modelMode?: AiModelMode | string };
+  const body = (await request.json().catch(() => ({}))) as {
+    prompt?: string;
+    modelMode?: AiModelMode | string;
+    modelId?: string | null;
+  };
   const prompt = body.prompt?.trim();
 
   if (!prompt) {
@@ -16,6 +20,7 @@ export async function POST(request: Request) {
   const result = await respondToBuilderMessage({
     message: prompt,
     modelMode: body.modelMode,
+    modelId: body.modelId,
   });
 
   if (!result.project) {

@@ -1,4 +1,5 @@
 import { buildProjectMemoryContext } from "./project-memory";
+import { normalizeFreeModelId } from "./free-models";
 import type {
   AiAgentResult,
   AiAgentRole,
@@ -190,6 +191,7 @@ export async function enhanceBuilderRequest(input: {
   message: string;
   intent: BuilderIntent;
   modelMode?: AiModelMode | string;
+  modelId?: string | null;
   hasProject: boolean;
   hasBrief: boolean;
   visionSummary?: string | null;
@@ -198,7 +200,7 @@ export async function enhanceBuilderRequest(input: {
   const modelMode = normalizeModelMode(input.modelMode);
   const resolvedMode = resolveModelMode(modelMode, task);
   const memoryContext = await buildProjectMemoryContext(input.message);
-  const available = getAvailableProviderCandidates(task, resolvedMode);
+  const available = getAvailableProviderCandidates(task, resolvedMode, input.modelId);
   const baseReport: AiEngineReport = {
     usedExternal: false,
     task,
@@ -335,13 +337,21 @@ function resolveModelMode(mode: AiModelMode, task: AiTaskKind): Exclude<AiModelM
   return "equilibrado";
 }
 
-function getAvailableProviderCandidates(task: AiTaskKind, mode: Exclude<AiModelMode, "auto">) {
+function getAvailableProviderCandidates(
+  task: AiTaskKind,
+  mode: Exclude<AiModelMode, "auto">,
+  requestedModelId?: string | null,
+) {
   const preferredOrder = parseProviderOrder(process.env.ZS_AI_PROVIDER_ORDER);
+  const freeModelId = normalizeFreeModelId(requestedModelId);
+  const orderedProviders: AiProviderId[] = freeModelId
+    ? ["openrouter", ...preferredOrder.filter((provider) => provider !== "openrouter")]
+    : preferredOrder;
   const tier = task === "code" || task === "bugfix" ? "code" : mode;
-  return preferredOrder
+  return orderedProviders
     .map((id) => providerConfigs.find((provider) => provider.id === id))
     .filter((provider): provider is ProviderConfig => Boolean(provider))
-    .map((config) => toProviderCandidate(config, tier))
+    .map((config) => toProviderCandidate(config, tier, freeModelId))
     .filter((candidate): candidate is ProviderCandidate => Boolean(candidate));
 }
 
@@ -360,6 +370,7 @@ function parseProviderOrder(value: string | undefined) {
 function toProviderCandidate(
   config: ProviderConfig,
   tier: Exclude<AiModelMode, "auto"> | "code",
+  modelOverride?: string,
 ): ProviderCandidate | null {
   const apiKey = firstEnv(config.apiKeyEnv);
 
@@ -370,7 +381,7 @@ function toProviderCandidate(
     config,
     apiKey: apiKey || "local-llama",
     baseUrl: trimTrailingSlash((config.baseUrlEnv && process.env[config.baseUrlEnv]) || config.defaultBaseUrl),
-    model: selectModel(config, tier),
+    model: config.id === "openrouter" && modelOverride ? modelOverride : selectModel(config, tier),
   };
 }
 

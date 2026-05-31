@@ -45,6 +45,7 @@ import type {
   ProjectBrief,
 } from "@/lib/ai-builder/generator";
 import type { AiEngineReport, AiModelMode } from "@/lib/ai-builder/engine-types";
+import type { FreeAiModel } from "@/lib/ai-builder/free-models";
 import type { BuilderImageAttachment, VisionAnalysis } from "@/lib/ai-builder/vision";
 
 type Screen = "landing" | "onboarding" | "app";
@@ -71,6 +72,7 @@ type AccountSettings = {
   language: "pt-BR" | "en-US";
   defaultPreview: "desktop" | "mobile";
   generationQuality: AiModelMode;
+  aiModel: string;
   animations: boolean;
   autosave: boolean;
   compactChat: boolean;
@@ -122,6 +124,7 @@ const defaultSettings: AccountSettings = {
   language: "pt-BR",
   defaultPreview: "desktop",
   generationQuality: "auto",
+  aiModel: "openrouter/free",
   animations: true,
   autosave: true,
   compactChat: false,
@@ -389,6 +392,7 @@ export function AiBuilderApp() {
           attachments: imagesForRequest,
           userName: account.name,
           modelMode: account.settings.generationQuality,
+          modelId: account.settings.aiModel,
         }),
       });
       const payload = (await response.json()) as
@@ -484,6 +488,7 @@ export function AiBuilderApp() {
           attachments: imagesForRequest,
           userName: account.name,
           modelMode: account.settings.generationQuality,
+          modelId: account.settings.aiModel,
         }),
       });
       const payload = (await response.json()) as
@@ -1987,6 +1992,33 @@ function SettingsModal(props: {
   onSave: (account: Account) => void;
 }) {
   const [draft, setDraft] = useState<Account>(props.account);
+  const [freeModels, setFreeModels] = useState<FreeAiModel[]>([
+    {
+      id: "openrouter/free",
+      name: "OpenRouter Free Router",
+      provider: "OpenRouter",
+      recommendedFor: ["chat", "generation", "edit", "code", "planning", "bugfix", "design", "qa", "seo"] as FreeAiModel["recommendedFor"],
+    },
+  ]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    fetch("/api/ai/models")
+      .then((response) => response.json())
+      .then((payload: { models?: FreeAiModel[] }) => {
+        if (!ignore && Array.isArray(payload.models) && payload.models.length) {
+          setFreeModels(payload.models);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const modelOptions = ensureSelectedFreeModel(freeModels, draft.settings.aiModel);
 
   function setSetting<Key extends keyof AccountSettings>(key: Key, value: AccountSettings[Key]) {
     setDraft((current) => ({
@@ -2034,7 +2066,7 @@ function SettingsModal(props: {
             <Sparkles className="h-4 w-4" aria-hidden="true" />
             IA e geracao
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-3">
             <label className="grid gap-1.5 text-sm">
               <span className="text-zinc-400">Modo de IA</span>
               <select
@@ -2048,6 +2080,20 @@ function SettingsModal(props: {
                 <option value="rapido">Rapido</option>
                 <option value="equilibrado">Equilibrado</option>
                 <option value="avancado">Avancado</option>
+              </select>
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              <span className="text-zinc-400">Modelo gratis</span>
+              <select
+                className="h-11 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
+                onChange={(event) => setSetting("aiModel", event.target.value)}
+                value={draft.settings.aiModel}
+              >
+                {modelOptions.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {formatFreeModelOption(model)}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="grid gap-1.5 text-sm">
@@ -2353,6 +2399,31 @@ function formatAiEngineLabel(aiEngine: AiEngineReport) {
   }.`;
 }
 
+function ensureSelectedFreeModel(models: FreeAiModel[], selectedModel: string) {
+  const normalizedSelectedModel = normalizeFreeAiModel(selectedModel);
+  if (models.some((model) => model.id === normalizedSelectedModel)) return models;
+
+  return [
+    ...models,
+    {
+      id: normalizedSelectedModel,
+      name: normalizedSelectedModel,
+      provider: "OpenRouter",
+      recommendedFor: ["chat", "generation", "edit", "code", "planning", "bugfix", "design", "qa", "seo"] as FreeAiModel["recommendedFor"],
+    },
+  ];
+}
+
+function formatFreeModelOption(model: FreeAiModel) {
+  const context = model.contextLength ? ` - ${formatCompactNumber(model.contextLength)} ctx` : "";
+  return `${model.name} (${model.id})${context}`;
+}
+
+function formatCompactNumber(value: number) {
+  if (value >= 1000) return `${Math.round(value / 1000)}k`;
+  return `${value}`;
+}
+
 function withPreviewInspector(html: string) {
   const inspector = `<script>
 (() => {
@@ -2606,7 +2677,15 @@ function normalizeAccountSettings(settings: AccountSettings): AccountSettings {
     ...defaultSettings,
     ...settings,
     generationQuality,
+    aiModel: normalizeFreeAiModel(settings.aiModel),
   };
+}
+
+function normalizeFreeAiModel(modelId: string | undefined) {
+  const trimmed = modelId?.trim();
+  if (!trimmed) return "openrouter/free";
+  if (trimmed === "openrouter/free" || trimmed.endsWith(":free")) return trimmed;
+  return "openrouter/free";
 }
 
 function deductTokens(account: Account, cost: number) {

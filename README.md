@@ -10,6 +10,7 @@ Chat de IA para criar sites, SaaS e sistemas automaticamente com preview ao vivo
 - Gerador local em `src/lib/ai-builder/generator.ts` com modos conversa, criacao e edicao.
 - Motor externo opcional com OpenRouter, OpenAI, Anthropic, Gemini, DeepSeek, Qwen, Llama e Mistral.
 - Selecao de modelo Auto/Rapido/Equilibrado/Avancado e agentes Arquiteto, Designer, Programador, QA e SEO.
+- Seletor de modelos gratis do OpenRouter nas configuracoes do app.
 - Memoria local de projetos e biblioteca de componentes em `.zs/builder-memory.json`.
 - API `POST /api/ai/chat` para conversar, criar e editar o projeto atual.
 - API `POST /api/ai/build` preservada para compatibilidade.
@@ -36,6 +37,7 @@ src/app/page.tsx
 src/components/ai-builder-app.tsx
 src/app/api/ai/chat/route.ts
 src/app/api/ai/build/route.ts
+src/app/api/ai/models/route.ts
 src/app/api/billing/mercado-pago/route.ts
 src/lib/ai-builder/generator.ts
 src/lib/ai-builder/external-ai.ts

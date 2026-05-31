@@ -143,6 +143,7 @@ export async function respondToBuilderMessage(input: {
   vision?: VisionContext | null;
   userName?: string;
   modelMode?: AiModelMode | string;
+  modelId?: string | null;
 }): Promise<BuilderAssistantResponse> {
   const message = input.message.trim();
   const vision = input.vision ?? null;
@@ -167,6 +168,7 @@ export async function respondToBuilderMessage(input: {
     message,
     intent,
     modelMode: input.modelMode,
+    modelId: input.modelId,
     hasProject: Boolean(input.project),
     hasBrief: Boolean(input.brief),
     visionSummary: vision?.analysis.summary ?? null,
