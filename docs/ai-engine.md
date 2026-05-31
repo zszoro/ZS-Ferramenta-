@@ -31,6 +31,18 @@ O backend classifica a tarefa antes da chamada:
 
 Em modo Auto a escolha e feita pelo backend. Em caso de falha, o motor local continua gerando preview e arquivos.
 
+## IA gratis enquanto estiver em teste
+
+O caminho gratuito mais simples e usar o OpenRouter Free Models Router:
+
+1. Crie uma chave em OpenRouter.
+2. Coloque `OPENROUTER_API_KEY` no `.env.local`.
+3. Mantenha `ZS_AI_FREE_MODE=true`.
+
+Com isso, o backend usa `openrouter/free`, que roteia para modelos gratuitos disponiveis. A disponibilidade e os limites podem variar, entao o fallback local continua ativo para nao quebrar o chat.
+
+Para usar modelos pagos ou especificos depois, defina `ZS_AI_FREE_MODE=false` e configure `OPENROUTER_MODEL_RAPIDO`, `OPENROUTER_MODEL_EQUILIBRADO`, `OPENROUTER_MODEL_AVANCADO` e `OPENROUTER_MODEL_CODE`.
+
 ## Multiagente
 
 Para tarefas complexas, o motor chama agentes em paralelo:

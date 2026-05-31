@@ -44,6 +44,6 @@ src/lib/ai-builder/project-memory.ts
 
 ## Proximo passo natural
 
-Copie `.env.example` para `.env.local` e configure pelo menos uma chave de IA externa para ativar modelos reais. Sem chave, o fallback local continua funcionando. Para login real multi-dispositivo, tokens persistentes e pagamento real, conecte banco no Vercel/Neon/Supabase e use `MERCADO_PAGO_ACCESS_TOKEN` no Route Handler de billing.
+Copie `.env.example` para `.env.local` e configure pelo menos uma chave de IA externa para ativar modelos reais. Para teste gratis, use `OPENROUTER_API_KEY` com `ZS_AI_FREE_MODE=true`; o backend usara `openrouter/free`. Sem chave, o fallback local continua funcionando. Para login real multi-dispositivo, tokens persistentes e pagamento real, conecte banco no Vercel/Neon/Supabase e use `MERCADO_PAGO_ACCESS_TOKEN` no Route Handler de billing.
 
 Mais detalhes: `docs/ai-engine.md`.

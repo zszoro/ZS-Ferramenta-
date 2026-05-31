@@ -54,10 +54,10 @@ const providerConfigs: ProviderConfig[] = [
     defaultBaseUrl: "https://openrouter.ai/api/v1",
     modelEnvPrefix: "OPENROUTER",
     defaults: {
-      rapido: "openai/gpt-4o-mini",
-      equilibrado: "anthropic/claude-3.5-sonnet",
-      avancado: "openai/gpt-4.1",
-      code: "deepseek/deepseek-chat",
+      rapido: "openrouter/free",
+      equilibrado: "openrouter/free",
+      avancado: "openrouter/free",
+      code: "openrouter/free",
     },
   },
   {
@@ -375,6 +375,17 @@ function toProviderCandidate(
 }
 
 function selectModel(config: ProviderConfig, tier: Exclude<AiModelMode, "auto"> | "code") {
+  if (config.id === "openrouter" && process.env.ZS_AI_FREE_MODE !== "false") {
+    return (
+      firstEnv(["OPENROUTER_MODEL_FREE", "ZS_AI_FREE_MODEL"]) ||
+      firstEnv([
+        `${config.modelEnvPrefix}_MODEL_${tier.toUpperCase()}`,
+        `${config.modelEnvPrefix}_${tier.toUpperCase()}_MODEL`,
+      ]) ||
+      "openrouter/free"
+    );
+  }
+
   const upperTier = tier.toUpperCase();
   const keys = [
     `${config.modelEnvPrefix}_MODEL_${upperTier}`,
