@@ -517,6 +517,20 @@ function editProjectFromPrompt(
 
   const nextPrompt = `${project.prompt}\nEdicao ${project.editCount + 1}: ${prompt}`;
   const summary = `Mudancas aplicadas: ${changes.join(", ")}. Mantive o modelo visual, atualizei o conteudo solicitado e regenerei os arquivos do projeto.`;
+  const generatedPreviewHtml = buildPreviewHtml({
+    prompt: nextPrompt,
+    name,
+    kind,
+    industry: project.industry,
+    features: nextFeatures,
+    palette: requestedPalette,
+    brief: project.brief,
+    visionReferences,
+    editNotes: changes,
+  });
+  const previewHtml = selectedElement
+    ? applySelectedPreviewEdit(project.previewHtml, generatedPreviewHtml, prompt)
+    : generatedPreviewHtml;
 
   return {
     ...project,
@@ -529,17 +543,7 @@ function editProjectFromPrompt(
     files: buildFiles(name, kind, nextFeatures, nextPrompt, project.brief, visionReferences, generationContext),
     aiEngine: generationContext.aiEngine,
     visionReferences,
-    previewHtml: buildPreviewHtml({
-      prompt: nextPrompt,
-      name,
-      kind,
-      industry: project.industry,
-      features: nextFeatures,
-      palette: requestedPalette,
-      brief: project.brief,
-      visionReferences,
-      editNotes: changes,
-    }),
+    previewHtml,
     editCount: project.editCount + 1,
     updatedAt: now,
   };
@@ -555,8 +559,9 @@ function classifyBuilderIntent(input: {
 
   const latest = latestPromptIntent(input.message);
   const visionShouldApply = Boolean(input.vision?.analysis.shouldApplyToPreview);
+  const hasSelectedElement = Boolean(extractSelectedElement(input.message));
 
-  if (input.project && (looksLikeEdit(latest) || visionShouldApply)) {
+  if (input.project && (looksLikeEdit(latest) || visionShouldApply || hasSelectedElement)) {
     return "edit";
   }
 
@@ -2193,7 +2198,7 @@ button { font: inherit; }
 .footer__links a:hover { color: var(--brown); }
 .footer__social a { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; background: rgba(59, 37, 24, 0.08); color: var(--brown); font-size: 0.78rem; font-weight: 900; }
 .site-footer p { grid-column: 1 / -1; margin: 0; }
-.reveal { opacity: 0; transform: translateY(22px); transition: opacity 580ms ease, transform 580ms ease; transition-delay: var(--delay, 0ms); }
+.reveal { opacity: 1; transform: translateY(0); transition: opacity 580ms ease, transform 580ms ease; transition-delay: var(--delay, 0ms); }
 .reveal.is-visible, .generated-site-shell .reveal { opacity: 1; transform: translateY(0); }
 .auth-backdrop {
   position: fixed;
@@ -5068,9 +5073,9 @@ function buildSiteReferencePreviewHtml(input: {
   const whatsappHref = buildPreviewWhatsappHref(config.contact.whatsapp, config.whatsappMessage, contact.primaryHref);
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
   const titleStyle = directives.titleColor ? ` style="color:${escapeHtml(directives.titleColor)}"` : "";
-  const heroTitle = config.hero.title ? `<h1${titleStyle}>${escapeHtml(config.hero.title)}</h1>` : "";
+  const heroTitle = config.hero.title ? `<h1 data-zs-id="hero-title"${titleStyle}>${escapeHtml(config.hero.title)}</h1>` : "";
   const loginButton = config.auth.enabled
-    ? `<button class="login-cta" type="button" data-open-auth>Entrar</button>`
+    ? `<button class="login-cta" type="button" data-open-auth data-zs-id="login-button">Entrar</button>`
     : "";
   const authTitle = config.auth.modalTitle ? `<h2 data-auth-title>${escapeHtml(config.auth.modalTitle)}</h2>` : "";
   const authModal = config.auth.enabled
@@ -5078,7 +5083,7 @@ function buildSiteReferencePreviewHtml(input: {
     : "";
   const bodyStyle = buildPreviewVariableStyle(config.theme);
   const navItems = config.navigation
-    .map((item) => `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`)
+    .map((item) => `<a href="${escapeHtml(item.href)}" data-zs-id="nav-${escapeHtml(slugify(item.label))}">${escapeHtml(item.label)}</a>`)
     .join("");
   const categoryTabs = ["Todos", ...config.categories]
     .map(
@@ -5090,13 +5095,13 @@ function buildSiteReferencePreviewHtml(input: {
   const featureCards = config.differentials
     .map(
       (item, index) =>
-        `<article class="feature-card reveal" style="--delay:${80 + index * 60}ms"><span class="feature-card__icon" aria-hidden="true">${escapeHtml(item.code)}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.text)}</p></article>`,
+        `<article class="feature-card reveal" data-zs-id="feature-${index + 1}" style="--delay:${80 + index * 60}ms"><span class="feature-card__icon" aria-hidden="true">${escapeHtml(item.code)}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.text)}</p></article>`,
     )
     .join("");
   const testimonials = config.testimonials
     .map(
       (testimonial, index) =>
-        `<article class="testimonial-card reveal" style="--delay:${index * 90}ms"><div class="testimonial-card__rating" aria-label="Avaliacao cinco estrelas">${escapeHtml(testimonial.rating)}</div><p>"${escapeHtml(testimonial.comment)}"</p><div class="testimonial-card__author"><strong>${escapeHtml(testimonial.name)}</strong><span>${escapeHtml(testimonial.role)}</span></div></article>`,
+        `<article class="testimonial-card reveal" data-zs-id="testimonial-${index + 1}" style="--delay:${index * 90}ms"><div class="testimonial-card__rating" aria-label="Avaliacao cinco estrelas">${escapeHtml(testimonial.rating)}</div><p>"${escapeHtml(testimonial.comment)}"</p><div class="testimonial-card__author"><strong>${escapeHtml(testimonial.name)}</strong><span>${escapeHtml(testimonial.role)}</span></div></article>`,
     )
     .join("");
 
@@ -5114,63 +5119,63 @@ function buildSiteReferencePreviewHtml(input: {
     <style>${buildSiteTemplateCss()}</style>
   </head>
   <body style="${bodyStyle}">
-    <header class="site-header" data-header>
-      <a class="brand" href="#inicio" aria-label="${escapedName}">
+    <header class="site-header" data-header data-zs-id="site-header">
+      <a class="brand" href="#inicio" aria-label="${escapedName}" data-zs-id="brand">
         <span class="brand__mark" aria-hidden="true">${brandInitial}</span>
         <span class="brand__text"><strong>${escapedName}</strong><small>${escapeHtml(config.brandTagline)}</small></span>
       </a>
       <button class="nav-toggle" type="button" aria-label="Abrir menu" aria-expanded="false" data-nav-toggle><span></span><span></span><span></span></button>
-      <nav class="main-nav" aria-label="Menu principal" data-nav>${navItems}</nav>
+      <nav class="main-nav" aria-label="Menu principal" data-nav data-zs-id="main-nav">${navItems}</nav>
       <div class="header-actions">
-        <a class="header-cta" href="${escapeHtml(whatsappHref)}"${isExternalWhatsapp ? ' target="_blank" rel="noreferrer"' : ""}>${escapeHtml(config.headerCta)}</a>
+        <a class="header-cta" href="${escapeHtml(whatsappHref)}"${isExternalWhatsapp ? ' target="_blank" rel="noreferrer"' : ""} data-zs-id="header-cta">${escapeHtml(config.headerCta)}</a>
         ${loginButton}
-        <button class="cart-toggle" type="button" data-open-cart>Carrinho <span data-cart-count>0</span></button>
+        <button class="cart-toggle" type="button" data-open-cart data-zs-id="cart-button">Carrinho <span data-cart-count>0</span></button>
       </div>
     </header>
 
     <main>
-      <section class="hero section" id="inicio">
+      <section class="hero section" id="inicio" data-zs-id="hero-section">
         <div class="hero__content reveal">
           ${heroTitle}
-          <p>${escapeHtml(config.hero.subtitle)}</p>
+          <p data-zs-id="hero-subtitle">${escapeHtml(config.hero.subtitle)}</p>
           <div class="hero__actions" aria-label="Acoes principais">
-            <a class="button button--primary" href="${escapeHtml(whatsappHref)}"${isExternalWhatsapp ? ' target="_blank" rel="noreferrer"' : ""}>${escapeHtml(config.hero.primaryCta)}</a>
-            <a class="button button--secondary" href="#produtos">${escapeHtml(config.hero.secondaryCta)}</a>
+            <a class="button button--primary" href="${escapeHtml(whatsappHref)}"${isExternalWhatsapp ? ' target="_blank" rel="noreferrer"' : ""} data-zs-id="hero-primary-cta">${escapeHtml(config.hero.primaryCta)}</a>
+            <a class="button button--secondary" href="#produtos" data-zs-id="hero-secondary-cta">${escapeHtml(config.hero.secondaryCta)}</a>
           </div>
         </div>
-        <div class="hero__media reveal" style="--delay:120ms">
+        <div class="hero__media reveal" style="--delay:120ms" data-zs-id="hero-image">
           <img src="${escapeHtml(config.images.hero)}" alt="${escapeHtml(config.images.heroAlt)}" referrerpolicy="no-referrer" />
-          <div class="hero__note" aria-label="Informacao de destaque"><strong>${escapeHtml(config.hero.cardTitle)}</strong><span>${escapeHtml(config.hero.cardText)}</span></div>
+          <div class="hero__note" aria-label="Informacao de destaque" data-zs-id="hero-note"><strong>${escapeHtml(config.hero.cardTitle)}</strong><span>${escapeHtml(config.hero.cardText)}</span></div>
         </div>
       </section>
 
-      <section class="about section" id="sobre">
-        <div class="section-heading reveal"><span class="section-heading__line"></span><h2>${escapeHtml(config.about.title)}</h2><p>${escapeHtml(config.about.text)}</p></div>
+      <section class="about section" id="sobre" data-zs-id="about-section">
+        <div class="section-heading reveal" data-zs-id="about-heading"><span class="section-heading__line"></span><h2>${escapeHtml(config.about.title)}</h2><p>${escapeHtml(config.about.text)}</p></div>
         <div class="about__grid">
-          <article class="about__story reveal"><h3>Receitas simples, preparo cuidadoso</h3><p>${escapeHtml(config.about.text)}</p></article>
+          <article class="about__story reveal" data-zs-id="about-story"><h3>Receitas simples, preparo cuidadoso</h3><p>${escapeHtml(config.about.text)}</p></article>
           <div class="feature-grid" aria-label="Diferenciais">${featureCards}</div>
         </div>
       </section>
 
-      <section class="products section" id="produtos">
-        <div class="section-heading section-heading--center reveal"><span class="section-heading__line"></span><h2>${escapeHtml(config.productsTitle)}</h2><p>${escapeHtml(config.productsIntro)}</p></div>
-        <div class="menu-panel reveal" id="cardapio">
-          <div class="category-tabs" aria-label="Categorias do cardapio" data-category-tabs>${categoryTabs}</div>
+      <section class="products section" id="produtos" data-zs-id="products-section">
+        <div class="section-heading section-heading--center reveal" data-zs-id="products-heading"><span class="section-heading__line"></span><h2>${escapeHtml(config.productsTitle)}</h2><p>${escapeHtml(config.productsIntro)}</p></div>
+        <div class="menu-panel reveal" id="cardapio" data-zs-id="products-panel">
+          <div class="category-tabs" aria-label="Categorias do cardapio" data-category-tabs data-zs-id="category-tabs">${categoryTabs}</div>
           <div class="product-grid" data-products-grid>${productCards}</div>
         </div>
       </section>
 
-      <section class="promo section" aria-label="Destaque">
-        <div class="promo__content reveal"><h2>${escapeHtml(config.promo.title)}</h2><p>${escapeHtml(config.promo.text)}</p><div class="promo__meta"><span>${escapeHtml(config.promo.metaLabel)}</span><strong>${escapeHtml(config.promo.price)}</strong></div><a class="button button--primary" href="${escapeHtml(whatsappHref)}"${isExternalWhatsapp ? ' target="_blank" rel="noreferrer"' : ""}>${escapeHtml(config.promo.cta)}</a></div>
-        <div class="promo__visual reveal" style="--delay:140ms"><div class="sprite-image sprite-image--combo" role="img" aria-label="${escapeHtml(config.images.promoAlt)}" style="background-image:url('${escapeHtml(config.images.promo)}');background-position:center;background-size:cover"></div></div>
+      <section class="promo section" aria-label="Destaque" data-zs-id="promo-section">
+        <div class="promo__content reveal" data-zs-id="promo-content"><h2>${escapeHtml(config.promo.title)}</h2><p>${escapeHtml(config.promo.text)}</p><div class="promo__meta"><span>${escapeHtml(config.promo.metaLabel)}</span><strong>${escapeHtml(config.promo.price)}</strong></div><a class="button button--primary" href="${escapeHtml(whatsappHref)}"${isExternalWhatsapp ? ' target="_blank" rel="noreferrer"' : ""}>${escapeHtml(config.promo.cta)}</a></div>
+        <div class="promo__visual reveal" style="--delay:140ms" data-zs-id="promo-image"><div class="sprite-image sprite-image--combo" role="img" aria-label="${escapeHtml(config.images.promoAlt)}" style="background-image:url('${escapeHtml(config.images.promo)}');background-position:center;background-size:cover"></div></div>
       </section>
 
-      <section class="testimonials section" id="depoimentos">
-        <div class="section-heading reveal"><span class="section-heading__line"></span><h2>${escapeHtml(config.testimonialsTitle)}</h2><p>${escapeHtml(config.testimonialsIntro)}</p></div>
+      <section class="testimonials section" id="depoimentos" data-zs-id="testimonials-section">
+        <div class="section-heading reveal" data-zs-id="testimonials-heading"><span class="section-heading__line"></span><h2>${escapeHtml(config.testimonialsTitle)}</h2><p>${escapeHtml(config.testimonialsIntro)}</p></div>
         <div class="testimonial-grid" data-testimonials-grid>${testimonials}</div>
       </section>
 
-      <section class="contact section" id="contato">
+      <section class="contact section" id="contato" data-zs-id="contact-section">
         <div class="contact__details reveal"><div class="section-heading"><span class="section-heading__line"></span><h2>${escapeHtml(config.contactTitle)}</h2><p>${escapeHtml(config.contactIntro)}</p></div><div class="contact-list"><article><strong>Endereço</strong><span>${escapeHtml(config.contact.address)}</span></article><article><strong>Horário</strong><span>${escapeHtml(config.contact.hours)}</span></article><article><strong>Telefone / WhatsApp</strong><span>${escapeHtml(config.contact.whatsapp)}</span></article></div></div>
         <div class="map-card reveal" style="--delay:120ms" aria-label="Espaco reservado para mapa"><div class="map-card__pin" aria-hidden="true"></div><strong>Mapa da loja</strong><span>Espaço reservado para incorporação do mapa.</span></div>
       </section>
@@ -5209,7 +5214,8 @@ function buildPreviewWhatsappHref(phone: string, message: string, fallback: stri
 }
 
 function buildPreviewProductCard(product: ReturnType<typeof buildGeneratedConfig>["products"][number]) {
-  return `<article class="product-card reveal" data-product-card data-category="${escapeHtml(product.category)}"><div class="product-card__media" style="background-image:url('${escapeHtml(product.image)}');background-position:center;background-size:cover" role="img" aria-label="${escapeHtml(product.imageAlt)}"></div><div class="product-card__body"><span class="product-card__category">${escapeHtml(product.category)}</span><div class="product-card__top"><h3>${escapeHtml(product.name)}</h3><span class="product-card__price">${escapeHtml(product.price)}</span></div><p>${escapeHtml(product.description)}</p><button class="product-card__cart" type="button" data-add-cart="${escapeHtml(product.name)}">Comprar</button></div></article>`;
+  const productId = `product-${slugify(product.name)}`;
+  return `<article class="product-card reveal" data-product-card data-category="${escapeHtml(product.category)}" data-zs-id="${escapeHtml(productId)}"><div class="product-card__media" data-zs-id="${escapeHtml(productId)}-image" style="background-image:url('${escapeHtml(product.image)}');background-position:center;background-size:cover" role="img" aria-label="${escapeHtml(product.imageAlt)}"></div><div class="product-card__body"><span class="product-card__category" data-zs-id="${escapeHtml(productId)}-category">${escapeHtml(product.category)}</span><div class="product-card__top"><h3 data-zs-id="${escapeHtml(productId)}-title">${escapeHtml(product.name)}</h3><span class="product-card__price" data-zs-id="${escapeHtml(productId)}-price">${escapeHtml(product.price)}</span></div><p data-zs-id="${escapeHtml(productId)}-description">${escapeHtml(product.description)}</p><button class="product-card__cart" type="button" data-add-cart="${escapeHtml(product.name)}" data-zs-id="${escapeHtml(productId)}-button">Comprar</button></div></article>`;
 }
 
 function buildPreviewTemplateScript(config: ReturnType<typeof buildGeneratedConfig>, whatsappHref: string) {
@@ -5667,6 +5673,177 @@ function extractPreviewDirectives(prompt: string): PreviewDirectives {
 function extractSelectedElement(prompt: string) {
   const match = prompt.match(/Elemento selecionado no preview:\s*([^\n]+)/i);
   return match ? cleanSentence(match[1], 90) : "";
+}
+
+function extractPreviewSelection(prompt: string) {
+  const line = prompt.match(/Elemento selecionado no preview:\s*([^\n]+)/i)?.[1] ?? "";
+  if (!line) return null;
+
+  const selector = line.match(/\(([^()\n]+)\)\.?$/)?.[1]?.trim() ?? "";
+  const zsId = selector.match(/\[data-zs-id=["']([^"']+)["']\]/)?.[1];
+
+  return {
+    line,
+    selector,
+    zsId,
+  };
+}
+
+function applySelectedPreviewEdit(currentHtml: string, regeneratedHtml: string, prompt: string) {
+  const selection = extractPreviewSelection(prompt);
+  if (!selection?.zsId) return regeneratedHtml;
+
+  if (isRemovalPrompt(prompt)) {
+    return removeElementByZsId(currentHtml, selection.zsId) ?? currentHtml;
+  }
+
+  const color = extractSelectedColor(prompt);
+  if (color) {
+    return applyStyleToElementByZsId(currentHtml, selection.zsId, color.style, color.value) ?? currentHtml;
+  }
+
+  const replacement = extractSelectedReplacementText(prompt);
+  if (replacement) {
+    return replaceElementTextByZsId(currentHtml, selection.zsId, replacement) ?? currentHtml;
+  }
+
+  return currentHtml;
+}
+
+function removeElementByZsId(html: string, zsId: string) {
+  const range = findElementRangeByZsId(html, zsId);
+  if (!range) return null;
+
+  return `${html.slice(0, range.start)}${html.slice(range.end)}`;
+}
+
+function replaceElementTextByZsId(html: string, zsId: string, replacement: string) {
+  const range = findElementRangeByZsId(html, zsId);
+  if (!range || range.selfClosing) return null;
+
+  const openEnd = html.indexOf(">", range.start);
+  const closeStart = html.lastIndexOf(`</${range.tagName}>`, range.end);
+  if (openEnd < 0 || closeStart <= openEnd) return null;
+
+  return `${html.slice(0, openEnd + 1)}${escapeHtml(replacement)}${html.slice(closeStart)}`;
+}
+
+function applyStyleToElementByZsId(html: string, zsId: string, styleName: string, value: string) {
+  const range = findElementRangeByZsId(html, zsId);
+  if (!range) return null;
+
+  const openingTag = html.slice(range.start, range.openEnd + 1);
+  const nextOpeningTag = upsertStyleDeclaration(openingTag, styleName, value);
+
+  return `${html.slice(0, range.start)}${nextOpeningTag}${html.slice(range.openEnd + 1)}`;
+}
+
+function findElementRangeByZsId(html: string, zsId: string) {
+  const escapedId = escapeRegExp(zsId);
+  const tagMatch = new RegExp(`<([a-z0-9-]+)\\b[^>]*data-zs-id=["']${escapedId}["'][^>]*>`, "i").exec(html);
+  if (!tagMatch || tagMatch.index === undefined) return null;
+
+  const start = tagMatch.index;
+  const tagName = tagMatch[1].toLowerCase();
+  const openEnd = start + tagMatch[0].length - 1;
+  const selfClosing = /\/\s*>$/.test(tagMatch[0]) || ["img", "input", "br", "hr", "meta", "link"].includes(tagName);
+  if (selfClosing) {
+    return { start, end: openEnd + 1, openEnd, tagName, selfClosing: true };
+  }
+
+  const tagPattern = new RegExp(`</?${escapeRegExp(tagName)}\\b[^>]*>`, "gi");
+  tagPattern.lastIndex = openEnd + 1;
+  let depth = 1;
+  let match: RegExpExecArray | null;
+
+  while ((match = tagPattern.exec(html))) {
+    if (match[0].startsWith("</")) {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          start,
+          end: match.index + match[0].length,
+          openEnd,
+          tagName,
+          selfClosing: false,
+        };
+      }
+    } else if (!/\/\s*>$/.test(match[0])) {
+      depth += 1;
+    }
+  }
+
+  return null;
+}
+
+function upsertStyleDeclaration(openingTag: string, styleName: string, value: string) {
+  const escapedValue = value.replace(/"/g, "&quot;");
+  const styleMatch = openingTag.match(/\sstyle=(["'])(.*?)\1/i);
+  if (!styleMatch) {
+    return openingTag.replace(/>$/, ` style="${styleName}:${escapedValue}">`);
+  }
+
+  const quote = styleMatch[1];
+  const currentStyle = styleMatch[2];
+  const declarations = currentStyle
+    .split(";")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => !item.toLowerCase().startsWith(`${styleName.toLowerCase()}:`));
+  declarations.push(`${styleName}:${escapedValue}`);
+
+  return openingTag.replace(styleMatch[0], ` style=${quote}${declarations.join(";")}${quote}`);
+}
+
+function extractSelectedReplacementText(prompt: string) {
+  const intent = latestPromptIntent(prompt);
+  const patterns = [
+    /(?:troque|mude|altere|edite|reescreva|coloque|substitua)[^.!?;\n]{0,80}?(?:para|por)\s+["']?([^"'.!?;\n]+(?:[.!?][^"'\n]+)?)/i,
+    /(?:texto|titulo|botao|label|nome)[^.!?;\n]{0,40}?(?:para|por)\s+["']?([^"'.!?;\n]+(?:[.!?][^"'\n]+)?)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = intent.match(pattern)?.[1]?.trim();
+    if (match && !isStyleOnlyTitleValue(match)) return cleanSentence(match, 180);
+  }
+
+  return undefined;
+}
+
+function extractSelectedColor(prompt: string) {
+  const intent = latestPromptIntent(prompt);
+  const lower = normalize(intent);
+  if (!lower.includes("cor") && !lower.includes("fundo")) return null;
+
+  const hex = intent.match(/#[0-9a-f]{3,6}\b/i)?.[0];
+  const namedColor = hex ?? extractNamedColor(lower);
+  if (!namedColor) return null;
+
+  return {
+    style: lower.includes("fundo") || lower.includes("background") ? "background" : "color",
+    value: namedColor,
+  };
+}
+
+function extractNamedColor(lower: string) {
+  const colors: Array<[string, string]> = [
+    ["verde", "#22c55e"],
+    ["marrom", "#7a3f18"],
+    ["amarelo", "#d99a12"],
+    ["dourado", "#c47f17"],
+    ["azul", "#2563eb"],
+    ["vermelho", "#dc2626"],
+    ["rosa", "#db2777"],
+    ["roxo", "#7c3aed"],
+    ["preto", "#111111"],
+    ["branco", "#ffffff"],
+  ];
+
+  return colors.find(([name]) => lower.includes(name))?.[1] ?? null;
+}
+
+function escapeRegExp(input: string) {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function applyMediaDirectives<T extends ReturnType<typeof getNicheMedia>>(

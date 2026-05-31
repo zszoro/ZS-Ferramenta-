@@ -1992,6 +1992,7 @@ function SettingsModal(props: {
   onSave: (account: Account) => void;
 }) {
   const [draft, setDraft] = useState<Account>(props.account);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [freeModels, setFreeModels] = useState<FreeAiModel[]>([
     {
       id: "openrouter/free",
@@ -2030,6 +2031,16 @@ function SettingsModal(props: {
     }));
   }
 
+  async function handleAvatarFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) return;
+    const dataUrl = await readFileAsDataUrl(file);
+    setDraft((current) => ({ ...current, avatarUrl: dataUrl }));
+  }
+
   return (
     <ModalShell title="Configuracoes" onClose={props.onClose}>
       <div className="grid max-h-[72vh] gap-4 overflow-y-auto pr-1">
@@ -2049,13 +2060,30 @@ function SettingsModal(props: {
             </label>
             <label className="grid gap-1.5 text-sm">
               <span className="text-zinc-400">URL da foto</span>
+              <span className="flex gap-2">
+                <input
+                  className="h-11 min-w-0 flex-1 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, avatarUrl: event.target.value }))
+                  }
+                  placeholder="https://..."
+                  value={draft.avatarUrl}
+                />
+                <button
+                  className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-xs font-bold text-zinc-200 transition hover:border-[#7cff6b]/50 hover:text-white"
+                  onClick={() => avatarInputRef.current?.click()}
+                  type="button"
+                >
+                  <ImagePlus className="h-4 w-4 text-[#7cff6b]" aria-hidden="true" />
+                  Foto
+                </button>
+              </span>
               <input
-                className="h-11 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, avatarUrl: event.target.value }))
-                }
-                placeholder="https://..."
-                value={draft.avatarUrl}
+                ref={avatarInputRef}
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarFileChange}
+                type="file"
               />
             </label>
           </div>
@@ -2435,6 +2463,8 @@ function withPreviewInspector(html: string) {
   }
 
   function selectorFor(element) {
+    const editable = element.closest("[data-zs-id]");
+    if (editable) return '[data-zs-id="' + editable.getAttribute("data-zs-id") + '"]';
     if (element.id) return "#" + element.id;
     const parts = [];
     let current = element;
@@ -2449,7 +2479,7 @@ function withPreviewInspector(html: string) {
 
   document.addEventListener("click", (event) => {
     const source = event.target;
-    const target = source instanceof Element ? source.closest("a,button,h1,h2,h3,h4,p,img,section,article,header,footer,nav,li,span,div") : null;
+    const target = source instanceof Element ? source.closest("[data-zs-id],a,button,h1,h2,h3,h4,p,img,section,article,header,footer,nav,li,span,div") : null;
     if (!target) return;
 
     event.preventDefault();
