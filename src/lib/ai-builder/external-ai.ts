@@ -237,12 +237,21 @@ export async function enhanceBuilderRequest(input: {
   try {
     const mainResult = await callWithFallback({
       candidates: available,
-      messages: buildBlueprintMessages({ ...input, task, resolvedMode, memoryContext }),
+      messages:
+        task === "chat"
+          ? buildChatMessages({ ...input, resolvedMode, memoryContext })
+          : buildBlueprintMessages({ ...input, task, resolvedMode, memoryContext }),
       task,
-      maxTokens: task === "chat" ? 900 : 1600,
-      temperature: task === "code" || task === "bugfix" ? 0.25 : 0.45,
+      maxTokens: task === "chat" ? 320 : 1600,
+      temperature: task === "chat" ? 0.7 : task === "code" || task === "bugfix" ? 0.25 : 0.45,
     });
-    const blueprint = parseBlueprint(mainResult.text);
+    const blueprint =
+      task === "chat"
+        ? {
+            reply: mainResult.text.trim(),
+            professionalPrompt: mainResult.text.trim(),
+          }
+        : parseBlueprint(mainResult.text);
     const agentResults = await runAgentsIfNeeded({
       message: input.message,
       task,
@@ -485,6 +494,38 @@ function buildBlueprintMessages(input: {
   ];
 }
 
+function buildChatMessages(input: {
+  message: string;
+  resolvedMode: Exclude<AiModelMode, "auto">;
+  hasProject: boolean;
+  memoryContext: string;
+}): ChatMessage[] {
+  return [
+    {
+      role: "system",
+      content: [
+        "Voce e a IA do chat da ZS Builder.",
+        "Responda em portugues do Brasil, de forma direta e util.",
+        "Use a IA externa de verdade para responder, sem frases prontas fixas.",
+        "Se o usuario pedir criacao ou edicao de site, explique brevemente o que vai fazer.",
+        "Nao invente credenciais e nunca peca segredo no frontend.",
+      ].join("\n"),
+    },
+    {
+      role: "user",
+      content: [
+        `Modo selecionado: ${input.resolvedMode}`,
+        `Projeto aberto: ${input.hasProject ? "sim" : "nao"}`,
+        "Memoria relevante:",
+        input.memoryContext,
+        "",
+        "Mensagem do usuario:",
+        input.message,
+      ].join("\n"),
+    },
+  ];
+}
+
 async function runAgentsIfNeeded(input: {
   message: string;
   task: AiTaskKind;
@@ -604,13 +645,27 @@ async function callWithFallback(input: {
 
   for (const candidate of input.candidates) {
     try {
-      return await callProvider(candidate, input);
+      return await withProviderTimeout(
+        callProvider(candidate, input),
+        Number(process.env.ZS_AI_TIMEOUT_MS ?? 12000),
+      );
     } catch (caught) {
       errors.push(`${candidate.config.label}: ${caught instanceof Error ? caught.message : "falha desconhecida"}`);
     }
   }
 
   throw new Error(`Todos os provedores externos falharam. ${errors.join(" | ")}`);
+}
+
+function withProviderTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error(`Timeout depois de ${timeoutMs}ms`)), timeoutMs);
+
+    promise
+      .then(resolve)
+      .catch(reject)
+      .finally(() => clearTimeout(timeout));
+  });
 }
 
 async function callProvider(
