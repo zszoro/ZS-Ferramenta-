@@ -17,6 +17,7 @@ export type ProjectBrief = {
   email?: string;
   niche: string;
   primaryColor: string;
+  logoUrl?: string;
 };
 
 export type BuilderProject = {
@@ -279,6 +280,7 @@ export function buildProjectFromBrief(
     `Cor principal: ${cleanBrief.primaryColor}.`,
     cleanBrief.phoneWhatsapp ? `Telefone/WhatsApp: ${cleanBrief.phoneWhatsapp}.` : "",
     cleanBrief.email ? `Email: ${cleanBrief.email}.` : "",
+    cleanBrief.logoUrl ? "Logo enviada pelo usuario para aplicar na marca do site." : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -661,6 +663,14 @@ function looksLikeEdit(prompt: string) {
     "pagamento",
     "login",
     "dashboard",
+    "produto",
+    "produtos",
+    "estoque",
+    "promocao",
+    "carrinho",
+    "agendamento",
+    "feedback",
+    "depoimento",
     "premium",
     "moderno",
     "sofisticado",
@@ -937,6 +947,12 @@ function detectIndustry(prompt: string) {
     ["moda", "lojas de roupas"],
     ["vestuario", "lojas de roupas"],
     ["boutique", "lojas de roupas"],
+    ["hamburgueria", "hamburguerias"],
+    ["hamburguer", "hamburguerias"],
+    ["hamburger", "hamburguerias"],
+    ["burger", "hamburguerias"],
+    ["lanchonete", "hamburguerias"],
+    ["lanche", "hamburguerias"],
     ["restaurante", "restaurantes"],
     ["barbearia", "barbearias"],
     ["barber", "barbearias"],
@@ -1011,6 +1027,7 @@ function buildName(prompt: string, industry: string, kind: BuilderProject["kind"
   if (explicitName) return titleCase(cleanName(explicitName));
 
   if (industry === "barbearias") return "Barbearia ZS";
+  if (industry === "hamburguerias") return "Burger ZS";
   if (industry === "restaurantes") return "Mesa ZS";
   if (industry === "academias") return "Fit ZS";
   if (industry === "clinicas") return "Clinica ZS";
@@ -1527,7 +1544,7 @@ export function getDb() {
     {
       path: "src/lib/server/auth.ts",
       language: "ts",
-      description: "Funcoes de autenticacao, senha e sessao para backend.",
+      description: "Funcoes de autenticacao, senha com hash + salt via bcrypt e sessao para backend.",
       content: `import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { getDb } from "./db";
@@ -1638,8 +1655,12 @@ import { getDb } from "@/lib/server/db";
 const schema = z.object({
   name: z.string().min(2),
   category: z.string().min(2),
+  description: z.string().optional(),
   price: z.number().nonnegative(),
+  imageUrl: z.string().url().optional(),
   stock: z.number().int().nonnegative().default(0),
+  unlimitedStock: z.boolean().default(false),
+  promotion: z.boolean().default(false),
 });
 
 export async function GET() {
@@ -1690,7 +1711,7 @@ export async function POST(request: Request) {
     const total = body.items.reduce((sum, item) => {
       const product = products.find((entry) => entry.id === item.productId);
       if (!product) throw new Error("Produto nao encontrado");
-      if (product.stock < item.quantity) throw new Error("Estoque insuficiente");
+      if (!product.unlimitedStock && product.stock < item.quantity) throw new Error("Estoque insuficiente");
       return sum + product.price * item.quantity;
     }, 0);
     const created = await tx.order.create({ data: { customerName: body.customerName, customerPhone: body.customerPhone, total } });
@@ -1698,8 +1719,10 @@ export async function POST(request: Request) {
       const product = products.find((entry) => entry.id === item.productId);
       if (!product) continue;
       await tx.orderItem.create({ data: { orderId: created.id, productId: item.productId, quantity: item.quantity, unitPrice: product.price } });
-      await tx.product.update({ where: { id: item.productId }, data: { stock: { decrement: item.quantity } } });
-      await tx.stockMovement.create({ data: { productId: item.productId, type: "SALE", quantity: -item.quantity, reason: "Venda " + created.id } });
+      if (!product.unlimitedStock) {
+        await tx.product.update({ where: { id: item.productId }, data: { stock: { decrement: item.quantity } } });
+        await tx.stockMovement.create({ data: { productId: item.productId, type: "SALE", quantity: -item.quantity, reason: "Venda " + created.id } });
+      }
     }
     return created;
   });
@@ -1739,6 +1762,45 @@ export async function POST(request: Request) {
 `,
     },
     {
+      path: "src/app/api/feedbacks/route.ts",
+      language: "ts",
+      description: "Feedbacks publicos com nota 0 a 5, vinculados ao usuario logado.",
+      content: `import { z } from "zod";
+import { getCurrentUser } from "@/lib/server/auth";
+import { getDb } from "@/lib/server/db";
+
+const schema = z.object({
+  rating: z.number().int().min(0).max(5),
+  comment: z.string().min(4).max(600),
+});
+
+export async function GET() {
+  const feedbacks = await getDb().feedback.findMany({
+    where: { approved: true },
+    orderBy: { createdAt: "desc" },
+    take: 1000,
+  });
+  return Response.json({ feedbacks });
+}
+
+export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) return Response.json({ error: "Nao autenticado" }, { status: 401 });
+  const body = schema.parse(await request.json());
+  const feedback = await getDb().feedback.create({
+    data: {
+      userId: user.id,
+      name: user.name,
+      rating: body.rating,
+      comment: body.comment,
+      approved: true,
+    },
+  });
+  return Response.json({ feedback }, { status: 201 });
+}
+`,
+    },
+    {
       path: "src/app/admin/page.tsx",
       language: "tsx",
       description: "Painel administrativo inicial para produtos, vendas, estoque e agenda.",
@@ -1746,6 +1808,7 @@ export async function POST(request: Request) {
   "Produtos e estoque",
   "Pedidos e vendas",
   "Agendamentos",
+  "Feedbacks",
   "Clientes",
 ];
 
@@ -1773,12 +1836,12 @@ export default function AdminPage() {
 
 function shouldIncludeCommerce(industry: string) {
   const normalized = normalize(industry);
-  return ["padaria", "loja", "roupa", "restaurante", "oficina"].some((item) => normalized.includes(item));
+  return ["padaria", "loja", "roupa", "restaurante", "hamburgueria", "oficina"].some((item) => normalized.includes(item));
 }
 
 function shouldIncludeScheduling(industry: string) {
   const normalized = normalize(industry);
-  return ["barbearia", "clinica", "odont", "oficina", "academia", "restaurante"].some((item) => normalized.includes(item));
+  return ["barbearia", "clinica", "odont", "oficina", "academia", "restaurante", "hamburgueria"].some((item) => normalized.includes(item));
 }
 
 function buildSiteTemplateCss() {
@@ -1856,6 +1919,13 @@ button { font: inherit; }
   font-weight: 800;
   box-shadow: 0 10px 24px rgba(59, 37, 24, 0.18);
 }
+.brand__logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 10px 24px rgba(59, 37, 24, 0.18);
+}
 .brand__text { display: grid; line-height: 1.1; }
 .brand__text strong { font-size: 1rem; letter-spacing: 0; }
 .brand__text small { color: var(--brown-soft); font-size: 0.76rem; margin-top: 3px; }
@@ -1882,7 +1952,7 @@ button { font: inherit; }
   background: color-mix(in srgb, var(--honey) 18%, transparent);
 }
 .header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
-.header-cta, .button, .login-cta, .cart-toggle, .product-card__cart {
+.header-cta, .button, .login-cta, .cart-toggle, .product-card__cart, .product-card__schedule {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1925,7 +1995,7 @@ button { font: inherit; }
   background: rgba(255, 253, 248, 0.76);
   border: 1px solid rgba(59, 37, 24, 0.16);
 }
-.header-cta:hover, .button:hover, .login-cta:hover, .cart-toggle:hover, .product-card__cart:hover { transform: translateY(-2px); }
+.header-cta:hover, .button:hover, .login-cta:hover, .cart-toggle:hover, .product-card__cart:hover, .product-card__schedule:hover { transform: translateY(-2px); }
 .button--primary:hover, .header-cta:hover { box-shadow: 0 18px 34px rgba(184, 95, 58, 0.28); }
 .button--secondary:hover, .login-cta:hover, .cart-toggle:hover { background: var(--white); box-shadow: var(--shadow-soft); }
 .nav-toggle {
@@ -2112,11 +2182,30 @@ button { font: inherit; }
   font-size: 0.78rem;
   font-weight: 800;
 }
+.product-card__meta { display: flex; flex-wrap: wrap; gap: 8px; }
+.product-card__stock, .product-card__promo {
+  width: fit-content;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--honey) 16%, transparent);
+  color: var(--brown);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+.product-card__promo { background: var(--brown); color: var(--cream); }
+.product-card__actions { display: grid; grid-template-columns: 1fr 0.72fr; gap: 8px; }
 .product-card__cart {
   min-height: 42px;
   width: 100%;
   background: var(--brown);
   color: var(--cream);
+}
+.product-card__schedule {
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--brown);
 }
 .promo {
   display: grid;
@@ -2147,11 +2236,54 @@ button { font: inherit; }
   box-shadow: 0 24px 55px rgba(0, 0, 0, 0.22);
 }
 .testimonial-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-.testimonial-card { display: grid; gap: 18px; padding: 24px; transition: transform 180ms ease, box-shadow 180ms ease; }
+.feedback-rail {
+  overflow: hidden;
+  width: 100%;
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.feedback-track {
+  display: flex;
+  width: max-content;
+  gap: 18px;
+  animation: feedback-scroll 48s linear infinite;
+}
+.feedback-rail.is-paused .feedback-track,
+.feedback-track:hover { animation-play-state: paused; }
+@keyframes feedback-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.testimonial-card {
+  display: grid;
+  width: min(360px, calc(100vw - 56px));
+  gap: 18px;
+  padding: 24px;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
 .testimonial-card__rating { color: var(--honey-dark); letter-spacing: 0; font-size: 1.05rem; }
 .testimonial-card__author { display: grid; gap: 2px; }
 .testimonial-card__author strong { font-size: 1rem; }
 .testimonial-card__author span { color: var(--brown-soft); font-size: 0.88rem; }
+.feedback-form {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.18fr) minmax(220px, 1fr) auto;
+  gap: 10px;
+  margin-top: 24px;
+}
+.feedback-form input,
+.feedback-form select {
+  min-height: 46px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--brown);
+  padding: 0 12px;
+}
+.feedback-status { color: var(--brown-soft); font-size: 0.86rem; }
 .contact { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(320px, 1fr); gap: 34px; align-items: stretch; }
 .contact-list { display: grid; gap: 14px; }
 .contact-list article { display: grid; gap: 6px; padding: 18px 20px; border-left: 3px solid var(--honey); border-radius: var(--radius); background: rgba(255, 253, 248, 0.74); box-shadow: var(--shadow-soft); }
@@ -2210,8 +2342,8 @@ button { font: inherit; }
   background: rgba(35, 22, 12, 0.52);
   backdrop-filter: blur(16px);
 }
-.auth-backdrop[hidden], .cart-drawer[hidden] { display: none !important; }
-.auth-modal, .cart-drawer {
+.auth-backdrop[hidden], .cart-drawer[hidden], .feedback-modal[hidden] { display: none !important; }
+.auth-modal, .cart-drawer, .feedback-dialog {
   position: relative;
   width: min(420px, calc(100vw - 32px));
   border: 1px solid var(--border);
@@ -2220,8 +2352,8 @@ button { font: inherit; }
   box-shadow: 0 28px 80px rgba(59, 37, 24, 0.22);
   padding: 28px;
 }
-.auth-modal h2, .cart-drawer h2 { margin: 0; font-family: "Playfair Display", Georgia, serif; font-size: 2.2rem; line-height: 1; }
-.auth-modal p, .cart-drawer p { color: var(--brown-soft); line-height: 1.6; }
+.auth-modal h2, .cart-drawer h2, .feedback-dialog h2 { margin: 0; font-family: "Playfair Display", Georgia, serif; font-size: 2.2rem; line-height: 1; }
+.auth-modal p, .cart-drawer p, .feedback-dialog p { color: var(--brown-soft); line-height: 1.6; }
 .auth-modal form { display: grid; gap: 14px; margin-top: 20px; }
 .auth-modal label { display: grid; gap: 7px; color: var(--brown-soft); font-size: 0.88rem; font-weight: 800; }
 .auth-modal input {
@@ -2255,6 +2387,16 @@ button { font: inherit; }
   right: max(20px, calc((100vw - 1120px) / 2));
   max-height: calc(100vh - 120px);
   overflow: auto;
+}
+.feedback-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(35, 22, 12, 0.52);
+  backdrop-filter: blur(16px);
 }
 .cart-list { display: grid; gap: 12px; margin-top: 18px; }
 .cart-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--white); }
@@ -2309,6 +2451,7 @@ button { font: inherit; }
   .about, .products, .testimonials, .contact { padding-block: 58px; }
   .feature-grid, .product-grid, .testimonial-grid { grid-template-columns: 1fr; }
   .about__story, .feature-card, .testimonial-card { padding: 22px; }
+  .product-card__actions, .feedback-form { grid-template-columns: 1fr; }
   .menu-panel { padding: 18px; border-radius: 18px; }
   .product-card__media { min-height: 210px; }
   .promo { width: var(--container); padding: 30px 22px; border-radius: 20px; }
@@ -2339,6 +2482,7 @@ model User {
   passwordHash String
   role         String        @default("USER")
   sessions     Session[]
+  feedbacks    Feedback[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 }
@@ -2358,7 +2502,10 @@ model Product {
   category    String
   description String?
   price       Float
+  imageUrl    String?
   stock       Int             @default(0)
+  unlimitedStock Boolean      @default(false)
+  promotion   Boolean         @default(false)
   active      Boolean         @default(true)
   items       OrderItem[]
   movements   StockMovement[]
@@ -2407,6 +2554,17 @@ model Appointment {
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name      String
+  rating    Int      @default(5)
+  comment   String
+  approved  Boolean  @default(true)
+  createdAt DateTime @default(now())
 }
 `;
 }
@@ -2513,6 +2671,7 @@ import { LoginRegisterModal } from "./LoginRegisterModal";
 import { SiteEditor } from "./SiteEditor";
 
 type Product = GeneratedSiteConfig["products"][number];
+type Feedback = GeneratedSiteConfig["testimonials"][number];
 
 type CartItem = {
   product: Product;
@@ -2529,6 +2688,8 @@ export function ${component}() {
   const [authUser, setAuthUser] = useState<LocalAuthUser | null>(() =>
     getStoredUser(generatedSiteConfig.auth.storageKey),
   );
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>(generatedSiteConfig.testimonials);
+  const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
 
   const whatsappHref = useMemo(() => {
     const digits = site.contact.whatsapp.replace(/\\D/g, "");
@@ -2621,6 +2782,24 @@ export function ${component}() {
     );
   }
 
+  function addFeedback(input: { rating: number; comment: string }) {
+    if (!authUser) {
+      requestAuth("header");
+      return false;
+    }
+
+    const rating = clampRating(input.rating);
+    const feedback: Feedback = {
+      name: authUser.name,
+      role: "cliente logado",
+      rating: buildStars(rating),
+      ratingValue: rating,
+      comment: input.comment.trim(),
+    };
+    setFeedbacks((current) => [feedback, ...current]);
+    return true;
+  }
+
   return (
     <main
       className="generated-site-shell"
@@ -2650,7 +2829,15 @@ export function ${component}() {
         onLogoutClick={logout}
       />
       <Hero site={site} whatsappHref={whatsappHref} />
-      <Features site={site} whatsappHref={whatsappHref} onAddToCart={addToCart} />
+      <Features
+        authUserName={authUser?.name}
+        feedbacks={feedbacks}
+        site={site}
+        whatsappHref={whatsappHref}
+        onAddFeedback={addFeedback}
+        onAddToCart={addToCart}
+        onSelectFeedback={setSelectedFeedback}
+      />
       <ContactSection site={site} whatsappHref={whatsappHref} />
       <Footer site={site} />
       {site.auth.enabled && isAuthOpen ? (
@@ -2672,9 +2859,22 @@ export function ${component}() {
         onClose={() => setIsCartOpen(false)}
         onQuantityChange={updateCartQuantity}
       />
+      {selectedFeedback ? (
+        <FeedbackModal feedback={selectedFeedback} onClose={() => setSelectedFeedback(null)} />
+      ) : null}
       <SiteEditor site={site} onUpdate={updateSite} />
     </main>
   );
+}
+
+function clampRating(value: number) {
+  if (!Number.isFinite(value)) return 5;
+  return Math.min(5, Math.max(0, Math.round(value)));
+}
+
+function buildStars(value: number) {
+  const rating = clampRating(value);
+  return "★".repeat(rating) + "☆".repeat(5 - rating);
 }
 
 function priceToNumber(price: string) {
@@ -2748,6 +2948,25 @@ function AuthModal({ site, onClose }: { site: GeneratedSiteConfig; onClose: () =
   );
 }
 
+function FeedbackModal(props: { feedback: Feedback; onClose: () => void }) {
+  return (
+    <div className="feedback-modal" role="dialog" aria-modal="true" aria-label="Feedback do cliente">
+      <section className="feedback-dialog">
+        <button className="modal-close" onClick={props.onClose} type="button" aria-label="Fechar feedback">
+          ×
+        </button>
+        <span className="section-heading__line" />
+        <div className="testimonial-card__rating" aria-label={"Avaliacao " + props.feedback.ratingValue + " de 5"}>
+          {props.feedback.rating}
+        </div>
+        <h2>{props.feedback.name}</h2>
+        <p>"{props.feedback.comment}"</p>
+        <strong>{props.feedback.role}</strong>
+      </section>
+    </div>
+  );
+}
+
 function CartDrawer(props: {
   cart: CartItem[];
   checkoutHref: string;
@@ -2806,6 +3025,7 @@ function buildGeneratedLocalAuthSource() {
 };
 
 type LocalAuthRecord = LocalAuthUser & {
+  passwordSalt: string;
   passwordHash: string;
 };
 
@@ -2853,11 +3073,13 @@ export function registerLocalUser(
     return { ok: false, error: "Esse email ja tem cadastro local. Entre com a senha." };
   }
 
+  const passwordSalt = createSalt();
   const user: LocalAuthRecord = {
     id: "local_" + Date.now().toString(36),
     name,
     email,
-    passwordHash: demoHash(input.password),
+    passwordSalt,
+    passwordHash: demoHash(input.password, passwordSalt),
     createdAt: new Date().toISOString(),
   };
   const nextUsers = [...users, user];
@@ -2874,7 +3096,7 @@ export function loginLocalUser(
   const users = readUsers(storageKey);
   const user = users.find((item) => item.email === email);
 
-  if (!user || user.passwordHash !== demoHash(input.password)) {
+  if (!user || user.passwordHash !== demoHash(input.password, user.passwordSalt ?? "")) {
     return { ok: false, error: "Email ou senha invalidos para esta demo local." };
   }
 
@@ -2906,8 +3128,12 @@ function toPublicUser(user: LocalAuthRecord): LocalAuthUser {
   };
 }
 
-function demoHash(value: string) {
-  const bytes = new TextEncoder().encode(value);
+function createSalt() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+function demoHash(value: string, salt: string) {
+  const bytes = new TextEncoder().encode(value + ":" + salt);
   const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
   return btoa(binary).split("").reverse().join("");
 }
@@ -3036,7 +3262,11 @@ export function Header({
   return (
     <header className="site-header" data-header>
       <a className="brand" href="#inicio" aria-label={site.name}>
-        <span className="brand__mark" aria-hidden="true">{brandInitial}</span>
+        {site.logoUrl ? (
+          <img className="brand__logo" src={site.logoUrl} alt="" aria-hidden="true" />
+        ) : (
+          <span className="brand__mark" aria-hidden="true">{brandInitial}</span>
+        )}
         <span className="brand__text">
           <strong>{site.name}</strong>
           <small>{site.brandTagline}</small>
@@ -3153,15 +3383,31 @@ import { useMemo, useState } from "react";
 import type { GeneratedSiteConfig } from "@/lib/generated/${slug}-config";
 
 type FeaturesProps = {
+  authUserName?: string;
+  feedbacks: GeneratedSiteConfig["testimonials"];
   site: GeneratedSiteConfig;
   whatsappHref: string;
+  onAddFeedback: (input: { rating: number; comment: string }) => boolean;
   onAddToCart: (product: GeneratedSiteConfig["products"][number]) => void;
+  onSelectFeedback: (testimonial: GeneratedSiteConfig["testimonials"][number]) => void;
 };
 
-export function Features({ site, whatsappHref, onAddToCart }: FeaturesProps) {
+export function Features({
+  authUserName,
+  feedbacks,
+  site,
+  whatsappHref,
+  onAddFeedback,
+  onAddToCart,
+  onSelectFeedback,
+}: FeaturesProps) {
   const [selectedCategory, setSelectedCategory] = useState("Todos");
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackRating, setFeedbackRating] = useState(5);
+  const [feedbackStatus, setFeedbackStatus] = useState("");
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
   const categories = ["Todos", ...site.categories];
+  const feedbackRail = feedbacks.length ? [...feedbacks, ...feedbacks] : [];
   const visibleProducts = useMemo(
     () =>
       selectedCategory === "Todos"
@@ -3249,9 +3495,25 @@ export function Features({ site, whatsappHref, onAddToCart }: FeaturesProps) {
                     <span className="product-card__price">{product.price}</span>
                   </div>
                   <p>{product.description}</p>
-                  <button className="product-card__cart" onClick={() => onAddToCart(product)} type="button">
-                    Comprar
-                  </button>
+                  <div className="product-card__meta">
+                    {product.promotion ? <span className="product-card__promo">Promocao</span> : null}
+                    <span className="product-card__stock">
+                      {product.unlimitedStock ? "Estoque ilimitado" : typeof product.stock === "number" ? product.stock + " em estoque" : "Disponivel"}
+                    </span>
+                  </div>
+                  <div className="product-card__actions">
+                    <button className="product-card__cart" onClick={() => onAddToCart(product)} type="button">
+                      Adicionar ao carrinho
+                    </button>
+                    <a
+                      className="product-card__schedule"
+                      href={whatsappHref}
+                      rel={isExternalWhatsapp ? "noreferrer" : undefined}
+                      target={isExternalWhatsapp ? "_blank" : undefined}
+                    >
+                      Agendar
+                    </a>
+                  </div>
                 </div>
               </article>
             ))}
@@ -3299,18 +3561,56 @@ export function Features({ site, whatsappHref, onAddToCart }: FeaturesProps) {
             {site.testimonialsIntro}
           </p>
         </div>
-        <div className="testimonial-grid" data-testimonials-grid>
-          {site.testimonials.map((testimonial, index) => (
-            <article className="testimonial-card reveal" style={{ "--delay": String(index * 90) + "ms" } as CSSProperties} key={testimonial.name}>
+        <div className="feedback-rail" data-feedback-rail>
+          <div className="feedback-track" data-testimonials-grid>
+          {feedbackRail.map((testimonial, index) => (
+            <button
+              className="testimonial-card reveal"
+              onClick={() => onSelectFeedback(testimonial)}
+              style={{ "--delay": String((index % Math.max(feedbacks.length, 1)) * 90) + "ms" } as CSSProperties}
+              key={testimonial.name + "-" + index}
+              type="button"
+            >
               <div className="testimonial-card__rating" aria-label="Avaliacao cinco estrelas">{testimonial.rating}</div>
               <p>"{testimonial.comment}"</p>
               <div className="testimonial-card__author">
                 <strong>{testimonial.name}</strong>
                 <span>{testimonial.role}</span>
               </div>
-            </article>
+            </button>
           ))}
+          </div>
         </div>
+        <form
+          className="feedback-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (feedbackComment.trim().length < 4) {
+              setFeedbackStatus("Escreva um feedback com pelo menos 4 caracteres.");
+              return;
+            }
+            const ok = onAddFeedback({ rating: feedbackRating, comment: feedbackComment });
+            if (!ok) {
+              setFeedbackStatus("Entre para enviar feedback.");
+              return;
+            }
+            setFeedbackComment("");
+            setFeedbackStatus("Feedback publicado no site.");
+          }}
+        >
+          <select value={feedbackRating} onChange={(event) => setFeedbackRating(Number(event.target.value))}>
+            {[0, 1, 2, 3, 4, 5].map((value) => (
+              <option key={value} value={value}>{value} estrelas</option>
+            ))}
+          </select>
+          <input
+            placeholder={authUserName ? "Escreva seu feedback" : "Entre para publicar feedback"}
+            value={feedbackComment}
+            onChange={(event) => setFeedbackComment(event.target.value)}
+          />
+          <button className="button button--primary" type="submit">Enviar feedback</button>
+          {feedbackStatus ? <span className="feedback-status">{feedbackStatus}</span> : null}
+        </form>
       </section>
     </>
   );
@@ -3499,6 +3799,7 @@ function buildGeneratedConfigSource(
   niche: string;
   templateSource: string;
   brandTagline: string;
+  logoUrl?: string;
   headerCta: string;
   whatsappMessage: string;
   footerText: string;
@@ -3545,6 +3846,9 @@ function buildGeneratedConfigSource(
     price: string;
     image: string;
     imageAlt: string;
+    stock?: number | null;
+    unlimitedStock?: boolean;
+    promotion?: boolean;
   }>;
   promo: {
     eyebrow: string;
@@ -3556,7 +3860,7 @@ function buildGeneratedConfigSource(
   };
   testimonialsTitle: string;
   testimonialsIntro: string;
-  testimonials: Array<{ name: string; role: string; rating: string; comment: string }>;
+  testimonials: Array<{ name: string; role: string; rating: string; ratingValue: number; comment: string }>;
   contactTitle: string;
   contactIntro: string;
   contact: {
@@ -3597,6 +3901,9 @@ function buildGeneratedConfig(
   const copy = buildTemplateCopy(industry, siteName, nicheLabel, features);
   const theme = buildTemplateTheme(industry, palette, brief?.primaryColor);
   const removals = extractRemovalDirectivesFromHistory(prompt);
+  const addedProducts = extractAddedProductsFromHistory(prompt, media, industry);
+  const baseProducts = isBakery ? buildBakeryGeneratedProducts(media) : buildIndustryGeneratedProducts(industry, media);
+  const products = [...addedProducts, ...baseProducts];
   const differentials = copy.differentials.slice(0, 4).map((item, index) => ({
     code: String(index + 1).padStart(2, "0"),
     ...item,
@@ -3608,6 +3915,7 @@ function buildGeneratedConfig(
     niche: nicheLabel,
     templateSource: "zszoro/Site.git",
     brandTagline: copy.brandTagline,
+    logoUrl: brief?.logoUrl?.trim() || "",
     headerCta: copy.headerCta,
     whatsappMessage: copy.whatsappMessage,
     footerText: `© ${new Date().getFullYear()} ${siteName}. Todos os direitos reservados.`,
@@ -3632,14 +3940,14 @@ function buildGeneratedConfig(
       promoAlt: copy.promoImageAlt || (isBakery ? "Mesa com produtos de padaria e café" : media.tertiaryAlt),
     },
     differentials,
-    categories: copy.categories,
+    categories: unique([...addedProducts.map((product) => product.category), ...copy.categories]),
     productsTitle: copy.productsTitle,
     productsIntro: copy.productsIntro,
-    products: isBakery ? buildBakeryGeneratedProducts(media) : buildIndustryGeneratedProducts(industry, media),
+    products,
     promo: copy.promo,
     testimonialsTitle: copy.testimonialsTitle,
     testimonialsIntro: copy.testimonialsIntro,
-    testimonials: copy.testimonials,
+    testimonials: copy.testimonials.map(toGeneratedTestimonial),
     contactTitle: copy.contactTitle,
     contactIntro: copy.contactIntro,
     contact: {
@@ -3826,6 +4134,21 @@ function buildTemplateTheme(industry: string, palette: Palette, requestedColor?:
       muted: "#7a6674",
       border: "rgba(42, 31, 44, 0.12)",
       shadow: "0 18px 50px rgba(42, 31, 44, 0.12)",
+    };
+  }
+
+  if (normalized.includes("hamburgueria")) {
+    return {
+      background: "#fff4e6",
+      backgroundSoft: "#f3d0a5",
+      card: "#fffdf8",
+      primary,
+      primaryDark: "#b91c1c",
+      secondary: "#1f1a14",
+      text: "#2b1810",
+      muted: "#785841",
+      border: "rgba(43, 24, 16, 0.14)",
+      shadow: "0 18px 50px rgba(80, 32, 14, 0.14)",
     };
   }
 
@@ -4067,6 +4390,38 @@ function buildTemplateCopy(industry: string, siteName: string, nicheLabel: strin
     });
   }
 
+  if (normalized.includes("hamburgueria")) {
+    return buildBusinessCopy({
+      ...common,
+      siteName,
+      niche: "hamburgueria artesanal",
+      brandTagline: "burgers, combos e delivery",
+      headerCta: "Fazer pedido",
+      productsNavLabel: "Produtos",
+      menuNavLabel: "Cardapio",
+      heroImageAlt: "Hamburguer artesanal com queijo derretido e batatas",
+      promoImageAlt: "Combo de hamburguer artesanal com acompanhamento",
+      heroTitle: "Burger artesanal, combos irresistiveis e pedido rapido.",
+      heroSubtitle: "Cardapio visual com produtos, promocoes, carrinho, login e WhatsApp para vender mais no delivery.",
+      cardTitle: "Delivery ativo",
+      cardText: "combos, promocoes e retirada no balcao",
+      aboutTitle: "Hamburgueria pronta para vender no horario de pico",
+      aboutText: `${siteName} organiza burgers, acompanhamentos, promocoes e atendimento para transformar visitantes em pedidos.`,
+      productsTitle: "Cardapio com foto, estoque e carrinho",
+      productsIntro: "Produtos com imagens do nicho, botao de carrinho e atalho para agendar retirada ou atendimento.",
+      promoTitle: "Combo smash da casa",
+      promoText: "Burger artesanal, batata crocante e bebida com chamada pronta para WhatsApp.",
+      promoPrice: "A partir de R$ 39,90",
+      categories: ["Burgers", "Combos", "Porcoes", "Bebidas"],
+      differentials: [
+        { title: "Fotos do cardapio", text: "Imagens focadas em burger, combos e delivery para o cliente reconhecer o produto." },
+        { title: "Carrinho pronto", text: "Cada produto tem compra rapida, estoque e fluxo de finalizacao por WhatsApp." },
+        { title: "Promocoes visiveis", text: "Destaques para combos e ofertas sem esconder informacoes importantes." },
+        { title: "Feedbacks reais", text: "Avaliacoes de clientes logados aparecem em esteira continua no site." },
+      ],
+    });
+  }
+
   if (normalized.includes("restaurante")) {
     return buildBusinessCopy({
       ...common,
@@ -4141,7 +4496,7 @@ function buildBusinessCopy(input: {
 }) {
   return {
     brandTagline: input.brandTagline,
-    headerCta: "Chamar no WhatsApp",
+    headerCta: input.headerCta,
     productsNavLabel: input.productsNavLabel,
     menuNavLabel: input.menuNavLabel,
     whatsappMessage: `Olá, vim pelo site da ${input.siteName} e quero mais informações.`,
@@ -4206,6 +4561,18 @@ function buildBusinessCopy(input: {
     address: input.address,
     hours: input.hours,
   };
+}
+
+function toGeneratedTestimonial(testimonial: { name: string; role: string; rating: string; comment: string }) {
+  return {
+    ...testimonial,
+    ratingValue: clampRating(Number.parseInt(testimonial.rating, 10) || 5),
+  };
+}
+
+function clampRating(value: number) {
+  if (!Number.isFinite(value)) return 5;
+  return Math.min(5, Math.max(0, Math.round(value)));
 }
 
 function buildBakeryGeneratedProducts(media: ReturnType<typeof getNicheMedia>) {
@@ -4404,6 +4771,55 @@ function buildIndustryGeneratedProducts(industry: string, media: ReturnType<type
     ];
   }
 
+  if (normalized.includes("hamburgueria")) {
+    return [
+      {
+        category: "Burgers",
+        name: "Smash artesanal",
+        description: "Carne selada na chapa, queijo derretido, molho da casa e pao tostado.",
+        price: "R$ 29,90",
+        image: media.hero,
+        imageAlt: "Hamburguer smash artesanal com queijo",
+        stock: 40,
+        unlimitedStock: false,
+        promotion: true,
+      },
+      {
+        category: "Combos",
+        name: "Combo burger + batata",
+        description: "Burger da casa, batata crocante e bebida para pedido rapido.",
+        price: "R$ 39,90",
+        image: media.secondary,
+        imageAlt: "Combo de hamburguer com batatas",
+        stock: 25,
+        unlimitedStock: false,
+        promotion: true,
+      },
+      {
+        category: "Porcoes",
+        name: "Batata cheddar bacon",
+        description: "Porcao generosa com cheddar cremoso e bacon crocante.",
+        price: "R$ 24,90",
+        image: media.tertiary,
+        imageAlt: "Batata com cheddar e bacon",
+        stock: 30,
+        unlimitedStock: false,
+        promotion: false,
+      },
+      {
+        category: "Bebidas",
+        name: "Refrigerante lata",
+        description: "Bebida gelada para acompanhar burgers, combos e porcoes.",
+        price: "R$ 7,00",
+        image: media.secondary,
+        imageAlt: "Bebida gelada para combo",
+        stock: null,
+        unlimitedStock: true,
+        promotion: false,
+      },
+    ];
+  }
+
   if (normalized.includes("restaurante")) {
     return [
       {
@@ -4477,6 +4893,66 @@ function buildIndustryGeneratedProducts(industry: string, media: ReturnType<type
       imageAlt: media.secondaryAlt,
     },
   ];
+}
+
+function extractAddedProductsFromHistory(
+  prompt: string,
+  media: ReturnType<typeof getNicheMedia>,
+  industry: string,
+) {
+  const blocks = prompt.split(/adicionar produto ao projeto:/i).slice(1);
+  const products = blocks
+    .map((block) => parseAddedProductBlock(block, media, industry))
+    .filter((product): product is NonNullable<ReturnType<typeof parseAddedProductBlock>> => Boolean(product));
+  const byName = new Map<string, (typeof products)[number]>();
+
+  for (const product of products) {
+    byName.set(normalize(product.name), product);
+  }
+
+  return Array.from(byName.values());
+}
+
+function parseAddedProductBlock(
+  block: string,
+  media: ReturnType<typeof getNicheMedia>,
+  industry: string,
+) {
+  const content = block.split(/\n\s*(?:Edicao\s+\d+:|Contexto IA:|Formato JSON esperado:)/i, 1)[0] ?? block;
+  const name = readAddedProductField(content, "Nome");
+  if (!name || normalize(name).includes("nao informado")) return null;
+
+  const category = readAddedProductField(content, "Categoria") || titleCase(industry || "Produtos");
+  const price = readAddedProductField(content, "Preco") || readAddedProductField(content, "Preço") || "Sob consulta";
+  const stockText = readAddedProductField(content, "Estoque");
+  const promotionText = normalize(readAddedProductField(content, "Promocao") || readAddedProductField(content, "Promoção"));
+  const image = readAddedProductField(content, "Imagem");
+  const unlimitedStock = !stockText || normalize(stockText).includes("ilimitado");
+  const stock = unlimitedStock ? null : Math.max(0, Number.parseInt(stockText.replace(/\D/g, ""), 10) || 0);
+  const query = encodeURIComponent(`${name} ${category} ${industry}`.trim());
+
+  return {
+    category: cleanSentence(category, 42),
+    name: cleanSentence(name, 64),
+    description: promotionText.includes("sim")
+      ? "Produto promocional adicionado pelo chat, pronto para compra e destaque no catalogo."
+      : "Produto adicionado pelo chat, com compra, estoque e agendamento conectados ao site.",
+    price: cleanSentence(price, 32),
+    image:
+      image && normalize(image) !== "buscar uma imagem gratuita do nicho no unsplash"
+        ? image
+        : media.secondary || `https://source.unsplash.com/900x700/?${query}`,
+    imageAlt: `${name} em ${category}`,
+    stock,
+    unlimitedStock,
+    promotion: promotionText.includes("sim"),
+  };
+}
+
+function readAddedProductField(content: string, label: string) {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = content.match(new RegExp(`(?:^|\\n)\\s*${escapedLabel}\\s*:\\s*(.+)`, "i"));
+  return match?.[1]?.trim().replace(/\.$/, "") ?? "";
 }
 
 function buildPreviewHtml(input: {
@@ -5070,6 +5546,9 @@ function buildSiteReferencePreviewHtml(input: {
 
   const escapedName = escapeHtml(config.name);
   const brandInitial = escapeHtml(config.name.trim().charAt(0).toUpperCase() || "Z");
+  const brandMark = config.logoUrl
+    ? `<img class="brand__logo" src="${escapeHtml(config.logoUrl)}" alt="" aria-hidden="true" />`
+    : `<span class="brand__mark" aria-hidden="true">${brandInitial}</span>`;
   const whatsappHref = buildPreviewWhatsappHref(config.contact.whatsapp, config.whatsappMessage, contact.primaryHref);
   const isExternalWhatsapp = whatsappHref.startsWith("https://");
   const titleStyle = directives.titleColor ? ` style="color:${escapeHtml(directives.titleColor)}"` : "";
@@ -5098,12 +5577,7 @@ function buildSiteReferencePreviewHtml(input: {
         `<article class="feature-card reveal" data-zs-id="feature-${index + 1}" style="--delay:${80 + index * 60}ms"><span class="feature-card__icon" aria-hidden="true">${escapeHtml(item.code)}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.text)}</p></article>`,
     )
     .join("");
-  const testimonials = config.testimonials
-    .map(
-      (testimonial, index) =>
-        `<article class="testimonial-card reveal" data-zs-id="testimonial-${index + 1}" style="--delay:${index * 90}ms"><div class="testimonial-card__rating" aria-label="Avaliacao cinco estrelas">${escapeHtml(testimonial.rating)}</div><p>"${escapeHtml(testimonial.comment)}"</p><div class="testimonial-card__author"><strong>${escapeHtml(testimonial.name)}</strong><span>${escapeHtml(testimonial.role)}</span></div></article>`,
-    )
-    .join("");
+  const testimonials = buildPreviewFeedbackCards(config.testimonials).join("");
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -5121,7 +5595,7 @@ function buildSiteReferencePreviewHtml(input: {
   <body style="${bodyStyle}">
     <header class="site-header" data-header data-zs-id="site-header">
       <a class="brand" href="#inicio" aria-label="${escapedName}" data-zs-id="brand">
-        <span class="brand__mark" aria-hidden="true">${brandInitial}</span>
+        ${brandMark}
         <span class="brand__text"><strong>${escapedName}</strong><small>${escapeHtml(config.brandTagline)}</small></span>
       </a>
       <button class="nav-toggle" type="button" aria-label="Abrir menu" aria-expanded="false" data-nav-toggle><span></span><span></span><span></span></button>
@@ -5172,7 +5646,8 @@ function buildSiteReferencePreviewHtml(input: {
 
       <section class="testimonials section" id="depoimentos" data-zs-id="testimonials-section">
         <div class="section-heading reveal" data-zs-id="testimonials-heading"><span class="section-heading__line"></span><h2>${escapeHtml(config.testimonialsTitle)}</h2><p>${escapeHtml(config.testimonialsIntro)}</p></div>
-        <div class="testimonial-grid" data-testimonials-grid>${testimonials}</div>
+        <div class="feedback-rail" data-feedback-rail><div class="feedback-track" data-testimonials-grid>${testimonials}${testimonials}</div></div>
+        <form class="feedback-form" data-feedback-form><select name="rating" aria-label="Nota do feedback"><option value="0">0 estrelas</option><option value="1">1 estrela</option><option value="2">2 estrelas</option><option value="3">3 estrelas</option><option value="4">4 estrelas</option><option value="5" selected>5 estrelas</option></select><input name="comment" placeholder="Entre e escreva seu feedback" /><button class="button button--primary" type="submit">Enviar feedback</button><span class="feedback-status" data-feedback-status></span></form>
       </section>
 
       <section class="contact section" id="contato" data-zs-id="contact-section">
@@ -5185,6 +5660,7 @@ function buildSiteReferencePreviewHtml(input: {
 
     ${authModal}
     <aside class="cart-drawer" hidden data-cart-drawer><button class="modal-close" type="button" aria-label="Fechar carrinho" data-close-cart>×</button><span class="section-heading__line"></span><h2>Carrinho</h2><div class="cart-list" data-cart-list><p>Adicione produtos para montar o pedido.</p></div></aside>
+    <div class="feedback-modal" hidden data-feedback-modal><section class="feedback-dialog"><button class="modal-close" type="button" aria-label="Fechar feedback" data-close-feedback>&times;</button><span class="section-heading__line"></span><div class="testimonial-card__rating" data-feedback-rating></div><h2 data-feedback-name></h2><p data-feedback-comment></p><strong data-feedback-role></strong></section></div>
     <script>${buildPreviewTemplateScript(config, whatsappHref)}</script>
   </body>
 </html>`;
@@ -5213,27 +5689,47 @@ function buildPreviewWhatsappHref(phone: string, message: string, fallback: stri
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
+function buildPreviewFeedbackCards(testimonials: ReturnType<typeof buildGeneratedConfig>["testimonials"]) {
+  return testimonials.map(
+    (testimonial, index) =>
+      `<button class="testimonial-card reveal" type="button" data-feedback-card="${index}" data-zs-id="testimonial-${index + 1}" style="--delay:${index * 90}ms"><div class="testimonial-card__rating" aria-label="Avaliacao ${testimonial.ratingValue} de 5">${escapeHtml(testimonial.rating)}</div><p>"${escapeHtml(testimonial.comment)}"</p><div class="testimonial-card__author"><strong>${escapeHtml(testimonial.name)}</strong><span>${escapeHtml(testimonial.role)}</span></div></button>`,
+  );
+}
+
 function buildPreviewProductCard(product: ReturnType<typeof buildGeneratedConfig>["products"][number]) {
   const productId = `product-${slugify(product.name)}`;
-  return `<article class="product-card reveal" data-product-card data-category="${escapeHtml(product.category)}" data-zs-id="${escapeHtml(productId)}"><div class="product-card__media" data-zs-id="${escapeHtml(productId)}-image" style="background-image:url('${escapeHtml(product.image)}');background-position:center;background-size:cover" role="img" aria-label="${escapeHtml(product.imageAlt)}"></div><div class="product-card__body"><span class="product-card__category" data-zs-id="${escapeHtml(productId)}-category">${escapeHtml(product.category)}</span><div class="product-card__top"><h3 data-zs-id="${escapeHtml(productId)}-title">${escapeHtml(product.name)}</h3><span class="product-card__price" data-zs-id="${escapeHtml(productId)}-price">${escapeHtml(product.price)}</span></div><p data-zs-id="${escapeHtml(productId)}-description">${escapeHtml(product.description)}</p><button class="product-card__cart" type="button" data-add-cart="${escapeHtml(product.name)}" data-zs-id="${escapeHtml(productId)}-button">Comprar</button></div></article>`;
+  const stock = "stock" in product ? product.stock : undefined;
+  const unlimitedStock = "unlimitedStock" in product && Boolean(product.unlimitedStock);
+  const stockLabel = unlimitedStock
+    ? "Estoque ilimitado"
+    : typeof stock === "number"
+      ? `${stock} em estoque`
+      : "Disponivel";
+  const promotion =
+    "promotion" in product && product.promotion ? `<span class="product-card__promo">Promocao</span>` : "";
+  return `<article class="product-card reveal" data-product-card data-category="${escapeHtml(product.category)}" data-zs-id="${escapeHtml(productId)}"><div class="product-card__media" data-zs-id="${escapeHtml(productId)}-image" style="background-image:url('${escapeHtml(product.image)}');background-position:center;background-size:cover" role="img" aria-label="${escapeHtml(product.imageAlt)}"></div><div class="product-card__body"><span class="product-card__category" data-zs-id="${escapeHtml(productId)}-category">${escapeHtml(product.category)}</span><div class="product-card__top"><h3 data-zs-id="${escapeHtml(productId)}-title">${escapeHtml(product.name)}</h3><span class="product-card__price" data-zs-id="${escapeHtml(productId)}-price">${escapeHtml(product.price)}</span></div><p data-zs-id="${escapeHtml(productId)}-description">${escapeHtml(product.description)}</p><div class="product-card__meta">${promotion}<span class="product-card__stock">${escapeHtml(stockLabel)}</span></div><div class="product-card__actions"><button class="product-card__cart" type="button" data-add-cart="${escapeHtml(product.name)}" data-zs-id="${escapeHtml(productId)}-button">Adicionar ao carrinho</button><a class="product-card__schedule" href="#contato" data-zs-id="${escapeHtml(productId)}-schedule">Agendar</a></div></div></article>`;
 }
 
 function buildPreviewTemplateScript(config: ReturnType<typeof buildGeneratedConfig>, whatsappHref: string) {
   const productsJson = JSON.stringify(config.products).replace(/</g, "\\u003c");
+  const testimonialsJson = JSON.stringify(config.testimonials).replace(/</g, "\\u003c");
   const siteName = JSON.stringify(config.name);
   const authConfigJson = JSON.stringify(config.auth).replace(/</g, "\\u003c");
   return `
 const products = ${productsJson};
+const baseFeedbacks = ${testimonialsJson};
 const siteName = ${siteName};
 const baseWhatsappHref = ${JSON.stringify(whatsappHref)};
 const authConfig = ${authConfigJson};
 const authUsersKey = authConfig.storageKey + ":users";
 const authActiveKey = authConfig.storageKey + ":active";
+const feedbacksKey = authConfig.storageKey + ":feedbacks";
 let selectedCategory = "Todos";
 let cart = [];
 let authMode = "login";
 let fallbackUsers = [];
 let fallbackActiveUser = null;
+let fallbackFeedbacks = [];
 let authUser = readAuthUser();
 let pendingProductName = null;
 function priceToNumber(price) {
@@ -5244,9 +5740,12 @@ function priceToNumber(price) {
 function formatCurrency(value) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
-function demoHash(value) {
+function createSalt() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+function demoHash(value, salt) {
   let hash = 0;
-  const text = String(value);
+  const text = String(value) + ":" + String(salt || "");
   for (let index = 0; index < text.length; index += 1) {
     hash = Math.imul(hash, 31) + text.charCodeAt(index);
   }
@@ -5312,11 +5811,13 @@ function registerLocalUser(input) {
   if (users.some((user) => user.email === email)) {
     return { ok: false, error: "Esse email ja tem cadastro local. Entre com a senha." };
   }
+  const passwordSalt = createSalt();
   const user = {
     id: "local_" + Date.now().toString(36),
     name,
     email,
-    passwordHash: demoHash(password),
+    passwordSalt,
+    passwordHash: demoHash(password, passwordSalt),
     createdAt: new Date().toISOString(),
   };
   writeUsers([...users, user]);
@@ -5326,7 +5827,7 @@ function loginLocalUser(input) {
   const email = String(input.email || "").trim().toLowerCase();
   const password = String(input.password || "");
   const user = readUsers().find((item) => item.email === email);
-  if (!user || user.passwordHash !== demoHash(password)) {
+  if (!user || user.passwordHash !== demoHash(password, user.passwordSalt || "")) {
     return { ok: false, error: "Email ou senha invalidos para esta demo local." };
   }
   return { ok: true, user };
@@ -5381,6 +5882,77 @@ function renderCart() {
     return;
   }
   list.innerHTML = cart.map((item) => '<article class="cart-item"><div><strong>' + item.product.name + '</strong><span>' + item.product.price + '</span></div><div class="cart-controls"><button type="button" data-dec="' + item.product.name + '">-</button><span>' + item.quantity + '</span><button type="button" data-inc="' + item.product.name + '">+</button></div></article>').join("") + '<div class="cart-total"><span>Total</span><strong>' + formatCurrency(total) + '</strong></div><a class="button button--primary" target="_blank" rel="noreferrer" href="' + buildCheckoutHref(total) + '">Finalizar pedido</a>';
+}
+function escapeHtmlClient(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+function clampRating(value) {
+  const rating = Number.parseInt(value, 10);
+  if (!Number.isFinite(rating)) return 5;
+  return Math.min(5, Math.max(0, rating));
+}
+function buildStars(value) {
+  const rating = clampRating(value);
+  return "★".repeat(rating) + "☆".repeat(5 - rating);
+}
+function readFeedbacks() {
+  try {
+    return JSON.parse(window.localStorage.getItem(feedbacksKey) || "[]");
+  } catch {
+    return fallbackFeedbacks;
+  }
+}
+function writeFeedbacks(feedbacks) {
+  fallbackFeedbacks = feedbacks;
+  try {
+    window.localStorage.setItem(feedbacksKey, JSON.stringify(feedbacks));
+  } catch {
+    // Sandbox previews can block localStorage; keep feedbacks in memory.
+  }
+}
+function allFeedbacks() {
+  return [...readFeedbacks(), ...baseFeedbacks].slice(0, 1200);
+}
+function buildFeedbackCard(feedback, index) {
+  return '<button class="testimonial-card reveal" type="button" data-feedback-card="' + index + '"><div class="testimonial-card__rating" aria-label="Avaliacao ' + clampRating(feedback.ratingValue) + ' de 5">' + escapeHtmlClient(feedback.rating || buildStars(feedback.ratingValue)) + '</div><p>"' + escapeHtmlClient(feedback.comment) + '"</p><div class="testimonial-card__author"><strong>' + escapeHtmlClient(feedback.name) + '</strong><span>' + escapeHtmlClient(feedback.role || "cliente") + '</span></div></button>';
+}
+function renderFeedbacks() {
+  const track = document.querySelector("[data-testimonials-grid]");
+  const feedbacks = allFeedbacks();
+  if (!track || !feedbacks.length) return;
+  const loop = [...feedbacks, ...feedbacks];
+  track.innerHTML = loop.map((feedback, index) => buildFeedbackCard(feedback, index % feedbacks.length)).join("");
+}
+function setFeedbackStatus(message) {
+  const status = document.querySelector("[data-feedback-status]");
+  if (status) status.textContent = message;
+}
+function openFeedback(index) {
+  const feedback = allFeedbacks()[index];
+  const modal = document.querySelector("[data-feedback-modal]");
+  if (!feedback || !modal) return;
+  const rail = document.querySelector("[data-feedback-rail]");
+  if (rail) rail.classList.add("is-paused");
+  modal.hidden = false;
+  const rating = document.querySelector("[data-feedback-rating]");
+  const name = document.querySelector("[data-feedback-name]");
+  const comment = document.querySelector("[data-feedback-comment]");
+  const role = document.querySelector("[data-feedback-role]");
+  if (rating) rating.textContent = feedback.rating || buildStars(feedback.ratingValue);
+  if (name) name.textContent = feedback.name;
+  if (comment) comment.textContent = '"' + feedback.comment + '"';
+  if (role) role.textContent = feedback.role || "cliente";
+}
+function closeFeedback() {
+  const modal = document.querySelector("[data-feedback-modal]");
+  const rail = document.querySelector("[data-feedback-rail]");
+  if (modal) modal.hidden = true;
+  if (rail) rail.classList.remove("is-paused");
 }
 function buildCheckoutHref(total) {
   if (!baseWhatsappHref.startsWith("https://wa.me/") || !cart.length) return baseWhatsappHref;
@@ -5439,12 +6011,15 @@ document.addEventListener("click", (event) => {
   if (category) { selectedCategory = category.dataset.category; renderCategories(); renderProducts(); return; }
   const add = event.target.closest("[data-add-cart]");
   if (add) { addToCart(add.dataset.addCart); return; }
+  const feedbackCard = event.target.closest("[data-feedback-card]");
+  if (feedbackCard) { openFeedback(Number(feedbackCard.dataset.feedbackCard)); return; }
   const inc = event.target.closest("[data-inc]");
   if (inc) { const item = cart.find((entry) => entry.product.name === inc.dataset.inc); if (item) item.quantity += 1; renderCart(); return; }
   const dec = event.target.closest("[data-dec]");
   if (dec) { cart = cart.map((item) => item.product.name === dec.dataset.dec ? { ...item, quantity: item.quantity - 1 } : item).filter((item) => item.quantity > 0); renderCart(); return; }
   if (event.target.closest("[data-open-cart]")) { document.querySelector("[data-cart-drawer]").hidden = false; renderCart(); return; }
   if (event.target.closest("[data-close-cart]")) { document.querySelector("[data-cart-drawer]").hidden = true; return; }
+  if (event.target.closest("[data-close-feedback]")) { closeFeedback(); return; }
   const authTrigger = event.target.closest("[data-open-auth]");
   if (authTrigger) {
     if (authTrigger.dataset.logout === "true") {
@@ -5465,6 +6040,34 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-auth-switch]")) { setAuthMode(authMode === "login" ? "register" : "login"); return; }
 });
 document.addEventListener("submit", (event) => {
+  if (event.target.matches("[data-feedback-form]")) {
+    event.preventDefault();
+    if (!authUser) {
+      setFeedbackStatus("Entre para enviar feedback.");
+      openAuth("header");
+      return;
+    }
+    const form = new FormData(event.target);
+    const comment = String(form.get("comment") || "").trim();
+    const ratingValue = clampRating(form.get("rating"));
+    if (comment.length < 4) {
+      setFeedbackStatus("Escreva um feedback com pelo menos 4 caracteres.");
+      return;
+    }
+    const feedback = {
+      name: authUser.name,
+      role: "cliente logado",
+      rating: buildStars(ratingValue),
+      ratingValue,
+      comment,
+      createdAt: new Date().toISOString(),
+    };
+    writeFeedbacks([feedback, ...readFeedbacks()].slice(0, 1000));
+    event.target.reset();
+    setFeedbackStatus("Feedback publicado no site.");
+    renderFeedbacks();
+    return;
+  }
   if (!event.target.matches("[data-auth-form]")) return;
   event.preventDefault();
   const form = new FormData(event.target);
@@ -5489,6 +6092,7 @@ document.addEventListener("submit", (event) => {
 setupNavigation();
 renderProducts();
 renderCart();
+renderFeedbacks();
 updateAuthButton();`;
 }
 
@@ -5636,6 +6240,7 @@ function normalizeBrief(brief: ProjectBrief): ProjectBrief {
     email: brief.email?.trim(),
     niche: brief.niche.trim() || "negocios digitais",
     primaryColor: normalizeColor(brief.primaryColor) ?? "#7cff6b",
+    logoUrl: brief.logoUrl?.trim(),
   };
 }
 
@@ -6006,6 +6611,14 @@ function getNicheMedia(industry: string) {
       tertiaryAlt: "Atendimento em barbearia moderna",
       credit: "Barber shop photos from Unsplash.",
     },
+    hamburguerias: {
+      hero: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1800&q=82",
+      secondary: "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=1200&q=82",
+      tertiary: "https://images.unsplash.com/photo-1576107232684-1279f390859f?auto=format&fit=crop&w=1200&q=82",
+      secondaryAlt: "Hamburguer artesanal com queijo e molho",
+      tertiaryAlt: "Combo de hamburguer com batata",
+      credit: "Burger photos from Unsplash.",
+    },
     restaurantes: {
       hero: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1800&q=82",
       secondary: "https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1200&q=82",
@@ -6060,6 +6673,7 @@ function getNicheMedia(industry: string) {
   if (normalized.includes("oficina") || normalized.includes("mecanica")) return images["oficinas mecanicas"];
   if (normalized.includes("roupa") || normalized.includes("moda")) return images["lojas de roupas"];
   if (normalized.includes("barbearia")) return images.barbearias;
+  if (normalized.includes("hamburgueria")) return images.hamburguerias;
   if (normalized.includes("restaurante")) return images.restaurantes;
   if (normalized.includes("academia")) return images.academias;
   if (normalized.includes("clinica")) return images.clinicas;

@@ -647,7 +647,7 @@ async function callWithFallback(input: {
     try {
       return await withProviderTimeout(
         callProvider(candidate, input),
-        Number(process.env.ZS_AI_TIMEOUT_MS ?? 12000),
+        resolveExternalTimeoutMs(input.task),
       );
     } catch (caught) {
       errors.push(`${candidate.config.label}: ${caught instanceof Error ? caught.message : "falha desconhecida"}`);
@@ -818,7 +818,7 @@ async function callGemini(
 
 async function fetchWithTimeout(url: string, init: RequestInit) {
   const controller = new AbortController();
-  const timeout = Number(process.env.ZS_AI_TIMEOUT_MS ?? 22000);
+  const timeout = resolveExternalTimeoutMs("generation");
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
@@ -829,6 +829,18 @@ async function fetchWithTimeout(url: string, init: RequestInit) {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+function resolveExternalTimeoutMs(task: AiTaskKind) {
+  const configured = Number(process.env.ZS_AI_TIMEOUT_MS);
+  const minimum =
+    task === "chat"
+      ? 12000
+      : task === "generation" || task === "planning" || task === "bugfix" || task === "code"
+        ? 45000
+        : 30000;
+
+  return Number.isFinite(configured) && configured > 0 ? Math.max(configured, minimum) : minimum;
 }
 
 async function parseJsonResponse(response: Response): Promise<unknown> {

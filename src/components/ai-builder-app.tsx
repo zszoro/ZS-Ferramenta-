@@ -27,6 +27,7 @@ import {
   MoveHorizontal,
   Palette,
   Paperclip,
+  PackagePlus,
   RefreshCw,
   ScanEye,
   Send,
@@ -60,6 +61,16 @@ type ChatMessage = {
   vision?: VisionAnalysis | null;
   aiEngine?: AiEngineReport;
   files?: BuilderProject["files"];
+};
+
+type ProductDraft = {
+  name: string;
+  category: string;
+  price: string;
+  stock: string;
+  unlimitedStock: boolean;
+  promotion: boolean;
+  imageUrl: string;
 };
 
 type PreviewSelection = {
@@ -227,6 +238,7 @@ export function AiBuilderApp() {
   const [tokensModalOpen, setTokensModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectBriefOpen, setProjectBriefOpen] = useState(false);
+  const [productModalOpen, setProductModalOpen] = useState(false);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -388,7 +400,7 @@ export function AiBuilderApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: messageForAi,
-          project,
+          project: compactProjectForRequest(project),
           attachments: imagesForRequest,
           userName: account.name,
           modelMode: account.settings.generationQuality,
@@ -457,6 +469,7 @@ export function AiBuilderApp() {
       `Cor principal: ${brief.primaryColor}.`,
       brief.phoneWhatsapp ? `WhatsApp: ${brief.phoneWhatsapp}.` : "",
       brief.email ? `Email: ${brief.email}.` : "",
+      brief.logoUrl ? "Logo da empresa enviada pelo usuario." : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -483,7 +496,7 @@ export function AiBuilderApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message,
-          project,
+          project: compactProjectForRequest(project),
           brief,
           attachments: imagesForRequest,
           userName: account.name,
@@ -527,6 +540,91 @@ export function AiBuilderApp() {
           id: `assistant-project-error-${Date.now()}`,
           role: "assistant",
           text: "Nao consegui criar o projeto agora. Revise o briefing e tente novamente.",
+        },
+      ]);
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  async function handleAddProduct(productDraft: ProductDraft) {
+    if (isSending || !account) return;
+
+    if (!project) {
+      setChatError("Crie um projeto antes de adicionar produtos.");
+      setProductModalOpen(false);
+      return;
+    }
+
+    if (account.tokens.remaining <= 0) {
+      setProductModalOpen(false);
+      setTokensModalOpen(true);
+      setChatError("Seus tokens acabaram. Escolha um plano ou aguarde o reset semanal.");
+      return;
+    }
+
+    const message = buildProductDraftMessage(productDraft, project.industry);
+
+    setProductModalOpen(false);
+    setInput("");
+    setChatError(null);
+    setIsSending(true);
+    setMessages((current) => [
+      ...current,
+      {
+        id: `user-product-${Date.now()}`,
+        role: "user",
+        text: message,
+      },
+    ]);
+
+    try {
+      const response = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message,
+          project: compactProjectForRequest(project),
+          userName: account.name,
+          modelMode: account.settings.generationQuality,
+          modelId: account.settings.aiModel,
+        }),
+      });
+      const payload = (await response.json()) as
+        | ({ ok: true } & BuilderAssistantResponse)
+        | { ok: false; error?: string };
+
+      if (!response.ok || !payload.ok) {
+        const responseError = "error" in payload ? payload.error : undefined;
+        throw new Error(responseError ?? "A IA nao conseguiu adicionar o produto.");
+      }
+
+      persistAccount(deductTokens(account, payload.tokenCost ?? 16));
+
+      if (payload.project) {
+        setProject(payload.project);
+        setCreatedPanelOpen(true);
+      }
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-product-${Date.now()}`,
+          role: "assistant",
+          text: payload.reply,
+          vision: payload.vision,
+          aiEngine: payload.aiEngine,
+          files: payload.project?.files,
+        },
+      ]);
+    } catch (caught) {
+      setChatError(caught instanceof Error ? caught.message : "Erro inesperado.");
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-product-error-${Date.now()}`,
+          role: "assistant",
+          text: "Nao consegui adicionar esse produto agora. Revise os dados e tente novamente.",
         },
       ]);
     } finally {
@@ -692,7 +790,10 @@ export function AiBuilderApp() {
               </div>
               <div>
                 <h1 className="text-base font-semibold text-white md:text-lg">ZS Ferramenta</h1>
-                <p className="text-xs text-zinc-500">Chat de IA para criar sites e SaaS</p>
+                <p className="text-xs text-zinc-500">
+                  Chat de IA para criar sites e SaaS - IA ativa:{" "}
+                  <span className="text-[#d8ff76]">{formatActiveAiSelection(account?.settings)}</span>
+                </p>
               </div>
             </div>
 
@@ -737,7 +838,9 @@ export function AiBuilderApp() {
                     <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
                     IA construindo e analisando o pedido...
                   </div>
-                  <p className="text-zinc-400">Interpretando conversa, atualizando arquivos e preparando preview.</p>
+                  <p className="text-zinc-400">
+                    Usando {formatActiveAiSelection(account?.settings)} para interpretar conversa, atualizar arquivos e preparar preview.
+                  </p>
                 </article>
               )}
 
@@ -753,6 +856,20 @@ export function AiBuilderApp() {
           <div className="shrink-0 border-t border-white/10 bg-[#070907]/95 px-4 py-4 backdrop-blur md:px-6">
             <div className="mx-auto w-full max-w-4xl">
               <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+                <button
+                  className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#7cff6b]/35 bg-[#7cff6b]/10 px-3 py-2 text-left text-xs font-bold text-[#d8ff76] transition hover:border-[#7cff6b]/70 hover:text-white"
+                  onClick={() => {
+                    if (!project) {
+                      setChatError("Crie um projeto antes de adicionar produtos.");
+                      return;
+                    }
+                    setProductModalOpen(true);
+                  }}
+                  type="button"
+                >
+                  <PackagePlus className="h-4 w-4" aria-hidden="true" />
+                  Adicionar produto
+                </button>
                 {quickPrompts.map((prompt) => (
                   <button
                     key={prompt}
@@ -977,6 +1094,14 @@ export function AiBuilderApp() {
         <CreateProjectModal
           onClose={() => setProjectBriefOpen(false)}
           onCreate={(brief) => void handleCreateProject(brief)}
+        />
+      )}
+
+      {productModalOpen && (
+        <AddProductModal
+          niche={project?.industry ?? ""}
+          onAdd={(productDraft) => void handleAddProduct(productDraft)}
+          onClose={() => setProductModalOpen(false)}
         />
       )}
     </main>
@@ -1784,7 +1909,16 @@ function CreateProjectModal(props: {
   const [email, setEmail] = useState("");
   const [niche, setNiche] = useState("Barbearia");
   const [primaryColor, setPrimaryColor] = useState("#7cff6b");
+  const [logoUrl, setLogoUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleLogoFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !file.type.startsWith("image/")) return;
+    setLogoUrl(await readFileAsDataUrl(file));
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1812,6 +1946,7 @@ function CreateProjectModal(props: {
       email: email.trim() || undefined,
       niche: cleanNiche,
       primaryColor,
+      logoUrl: logoUrl.trim() || undefined,
     });
   }
 
@@ -1888,6 +2023,33 @@ function CreateProjectModal(props: {
           </div>
         </label>
 
+        <label className="grid gap-1.5 text-sm">
+          <span className="text-zinc-400">Logo da empresa opcional</span>
+          <span className="flex gap-2">
+            <input
+              className="h-11 min-w-0 flex-1 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
+              onChange={(event) => setLogoUrl(event.target.value)}
+              placeholder="https://... ou selecione uma imagem"
+              value={logoUrl}
+            />
+            <button
+              className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-xs font-bold text-zinc-200 transition hover:border-[#7cff6b]/50 hover:text-white"
+              onClick={() => logoInputRef.current?.click()}
+              type="button"
+            >
+              <ImagePlus className="h-4 w-4 text-[#7cff6b]" aria-hidden="true" />
+              Logo
+            </button>
+          </span>
+          <input
+            ref={logoInputRef}
+            accept="image/*"
+            className="hidden"
+            onChange={handleLogoFileChange}
+            type="file"
+          />
+        </label>
+
         {error && (
           <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-100">
             {error}
@@ -1908,6 +2070,195 @@ function CreateProjectModal(props: {
           >
             <Sparkles className="h-4 w-4" aria-hidden="true" />
             Gerar site
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+function AddProductModal(props: {
+  niche: string;
+  onAdd: (productDraft: ProductDraft) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState(props.niche ? titleCase(props.niche).slice(0, 34) : "Produtos");
+  const [price, setPrice] = useState("");
+  const [stock, setStock] = useState("");
+  const [unlimitedStock, setUnlimitedStock] = useState(true);
+  const [promotion, setPromotion] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const productImageInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleProductImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !file.type.startsWith("image/")) return;
+    setImageUrl(await readFileAsDataUrl(file));
+  }
+
+  function useUnsplashImage() {
+    const query = [name.trim(), props.niche, category.trim(), "product"].filter(Boolean).join(",");
+    setImageUrl(`https://source.unsplash.com/900x700/?${encodeURIComponent(query || "product")}`);
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const cleanName = name.trim();
+    const cleanCategory = category.trim() || "Produtos";
+
+    if (cleanName.length < 2) {
+      setError("Digite o nome do produto.");
+      return;
+    }
+
+    const parsedStock = Number.parseInt(stock, 10);
+
+    if (!unlimitedStock && (!stock.trim() || !Number.isFinite(parsedStock) || parsedStock < 0)) {
+      setError("Informe um estoque valido ou marque estoque ilimitado.");
+      return;
+    }
+
+    props.onAdd({
+      name: cleanName,
+      category: cleanCategory,
+      price: price.trim() || "Sob consulta",
+      stock: stock.trim(),
+      unlimitedStock,
+      promotion,
+      imageUrl: imageUrl.trim(),
+    });
+  }
+
+  return (
+    <ModalShell title="Adicionar produto" onClose={props.onClose}>
+      <form className="grid gap-5" onSubmit={submit}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="grid gap-1.5 text-sm">
+            <span className="text-zinc-400">Nome do produto</span>
+            <input
+              className="h-11 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Ex.: Combo burger artesanal"
+              value={name}
+            />
+          </label>
+
+          <label className="grid gap-1.5 text-sm">
+            <span className="text-zinc-400">Categoria</span>
+            <input
+              className="h-11 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
+              onChange={(event) => setCategory(event.target.value)}
+              placeholder="Lanches, Servicos, Planos..."
+              value={category}
+            />
+          </label>
+
+          <label className="grid gap-1.5 text-sm">
+            <span className="text-zinc-400">Preco</span>
+            <input
+              className="h-11 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
+              onChange={(event) => setPrice(event.target.value)}
+              placeholder="R$ 39,90 ou Sob consulta"
+              value={price}
+            />
+          </label>
+
+          <label className="grid gap-1.5 text-sm">
+            <span className="text-zinc-400">Estoque</span>
+            <input
+              className="h-11 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70 disabled:opacity-50"
+              disabled={unlimitedStock}
+              min={0}
+              onChange={(event) => setStock(event.target.value)}
+              placeholder={unlimitedStock ? "Ilimitado" : "Ex.: 24"}
+              type="number"
+              value={stock}
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-2 md:grid-cols-2">
+          <ToggleRow
+            checked={unlimitedStock}
+            icon={<ShieldCheck className="h-4 w-4" />}
+            label="Estoque ilimitado"
+            onChange={setUnlimitedStock}
+          />
+          <ToggleRow
+            checked={promotion}
+            icon={<Sparkles className="h-4 w-4" />}
+            label="Promocao"
+            onChange={setPromotion}
+          />
+        </div>
+
+        <label className="grid gap-1.5 text-sm">
+          <span className="text-zinc-400">Imagem do produto</span>
+          <span className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
+            <input
+              className="h-11 min-w-0 rounded-lg border border-white/10 bg-black/40 px-3 text-white outline-none focus:border-[#7cff6b]/70"
+              onChange={(event) => setImageUrl(event.target.value)}
+              placeholder="URL da imagem"
+              value={imageUrl}
+            />
+            <button
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-xs font-bold text-zinc-200 transition hover:border-[#7cff6b]/50 hover:text-white"
+              onClick={() => productImageInputRef.current?.click()}
+              type="button"
+            >
+              <ImagePlus className="h-4 w-4 text-[#7cff6b]" aria-hidden="true" />
+              Pasta
+            </button>
+            <button
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-xs font-bold text-zinc-200 transition hover:border-[#7cff6b]/50 hover:text-white"
+              onClick={useUnsplashImage}
+              type="button"
+            >
+              <Sparkles className="h-4 w-4 text-[#7cff6b]" aria-hidden="true" />
+              Unsplash
+            </button>
+          </span>
+          <input
+            ref={productImageInputRef}
+            accept="image/*"
+            className="hidden"
+            onChange={handleProductImageChange}
+            type="file"
+          />
+        </label>
+
+        {imageUrl && (
+          <span
+            aria-label="Preview da imagem do produto"
+            className="block aspect-[16/7] rounded-xl border border-white/10 bg-cover bg-center"
+            role="img"
+            style={{ backgroundImage: `url("${imageUrl}")` }}
+          />
+        )}
+
+        {error && (
+          <div className="rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-100">
+            {error}
+          </div>
+        )}
+
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            className="h-11 rounded-lg border border-white/10 px-4 text-sm font-semibold text-zinc-300 transition hover:text-white"
+            onClick={props.onClose}
+            type="button"
+          >
+            Cancelar
+          </button>
+          <button
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#7cff6b] px-4 text-sm font-black text-black transition hover:bg-[#d8ff76]"
+            type="submit"
+          >
+            <PackagePlus className="h-4 w-4" aria-hidden="true" />
+            Adicionar ao projeto
           </button>
         </div>
       </form>
@@ -2001,6 +2352,11 @@ function SettingsModal(props: {
       recommendedFor: ["chat", "generation", "edit", "code", "planning", "bugfix", "design", "qa", "seo"] as FreeAiModel["recommendedFor"],
     },
   ]);
+  const [aiTest, setAiTest] = useState<{
+    status: "idle" | "loading" | "success" | "error";
+    message: string;
+    report?: AiEngineReport;
+  }>({ status: "idle", message: "" });
 
   useEffect(() => {
     let ignore = false;
@@ -2039,6 +2395,45 @@ function SettingsModal(props: {
     if (!file.type.startsWith("image/")) return;
     const dataUrl = await readFileAsDataUrl(file);
     setDraft((current) => ({ ...current, avatarUrl: dataUrl }));
+  }
+
+  async function testSelectedAi() {
+    setAiTest({ status: "loading", message: "Testando modelo selecionado..." });
+
+    try {
+      const response = await fetch("/api/ai/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          modelMode: draft.settings.generationQuality,
+          modelId: draft.settings.aiModel,
+        }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        usedExternal?: boolean;
+        reply?: string;
+        error?: string;
+        aiEngine?: AiEngineReport;
+      };
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error ?? "Teste da IA falhou.");
+      }
+
+      setAiTest({
+        status: payload.usedExternal ? "success" : "error",
+        message: payload.usedExternal
+          ? payload.reply ?? "IA externa respondeu."
+          : payload.error ?? "A rota respondeu, mas caiu no fallback local.",
+        report: payload.aiEngine,
+      });
+    } catch (caught) {
+      setAiTest({
+        status: "error",
+        message: caught instanceof Error ? caught.message : "Nao consegui testar a IA.",
+      });
+    }
   }
 
   return (
@@ -2137,6 +2532,47 @@ function SettingsModal(props: {
                 <option value="mobile">Mobile</option>
               </select>
             </label>
+          </div>
+          <div className="mt-4 rounded-xl border border-[#7cff6b]/20 bg-black/25 p-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">
+                  Chat usara: {formatActiveAiSelection(draft.settings)}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  O teste abaixo chama o backend com este modelo antes de salvar.
+                </p>
+              </div>
+              <button
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#7cff6b]/35 bg-[#7cff6b]/10 px-3 text-xs font-bold text-[#d8ff76] transition hover:border-[#7cff6b]/70 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={aiTest.status === "loading"}
+                onClick={testSelectedAi}
+                type="button"
+              >
+                {aiTest.status === "loading" ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Brain className="h-4 w-4" aria-hidden="true" />
+                )}
+                Testar IA
+              </button>
+            </div>
+            {aiTest.status !== "idle" && (
+              <div
+                className={`mt-3 rounded-lg border p-3 text-xs leading-5 ${
+                  aiTest.status === "success"
+                    ? "border-[#7cff6b]/25 bg-[#7cff6b]/10 text-[#d8ff76]"
+                    : aiTest.status === "loading"
+                      ? "border-white/10 bg-white/[0.04] text-zinc-300"
+                      : "border-red-400/25 bg-red-400/10 text-red-100"
+                }`}
+              >
+                <p>{aiTest.message}</p>
+                {aiTest.report && (
+                  <p className="mt-1 text-zinc-400">{formatAiEngineLabel(aiTest.report)}</p>
+                )}
+              </div>
+            )}
           </div>
           <div className="mt-4 grid gap-2 md:grid-cols-2">
             <ToggleRow
@@ -2415,6 +2851,46 @@ function dataUrlMimeType(value: string): BuilderImageAttachment["mimeType"] {
 function formatBytes(value: number) {
   if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatActiveAiSelection(settings?: AccountSettings) {
+  const model = settings?.aiModel || defaultSettings.aiModel;
+  const mode = settings?.generationQuality || defaultSettings.generationQuality;
+  return `${model} (${mode})`;
+}
+
+function buildProductDraftMessage(productDraft: ProductDraft, niche: string) {
+  const stock = productDraft.unlimitedStock
+    ? "Estoque: ilimitado."
+    : `Estoque: ${productDraft.stock || "0"}.`;
+  return [
+    "Adicionar produto ao projeto:",
+    `Nicho do site: ${niche || "nao informado"}.`,
+    `Nome: ${productDraft.name}.`,
+    `Categoria: ${productDraft.category}.`,
+    `Preco: ${productDraft.price}.`,
+    stock,
+    `Promocao: ${productDraft.promotion ? "sim" : "nao"}.`,
+    productDraft.imageUrl ? `Imagem: ${productDraft.imageUrl}.` : "Imagem: buscar uma imagem gratuita do nicho no Unsplash.",
+    "Atualize somente o catalogo/produtos, mantenha o resto do projeto e regenere o preview.",
+  ].join("\n");
+}
+
+function compactProjectForRequest(project: BuilderProject | null) {
+  if (!project) return null;
+
+  return {
+    ...project,
+    files: [],
+  };
+}
+
+function titleCase(input: string) {
+  return input
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 }
 
 function formatAiEngineLabel(aiEngine: AiEngineReport) {
